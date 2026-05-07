@@ -23,24 +23,12 @@ def detect_store_from_url(url: str) -> Store:
     host = (urlparse(url).netloc or "").lower()
     if "mercadolivre" in host or "mercadolibre" in host or "meli." in host:
         return Store.MERCADOLIVRE
-    if "shopee" in host or "shp.ee" in host or "shope.ee" in host:
-        return Store.SHOPEE
-    if "amazon" in host or host in {"a.co", "amzn.to"} or "amzn." in host:
-        return Store.AMAZON
-    if "aliexpress" in host:
-        return Store.ALIEXPRESS
-    if "shein" in host:
-        return Store.SHEIN
     return Store.UNKNOWN
 
 
 def detect_store_from_id(text: str) -> Store:
     if MLB_RE.search(text):
         return Store.MERCADOLIVRE
-    if ASIN_RE.search(text):
-        return Store.AMAZON
-    if SHOPEE_DOT_RE.search(text):
-        return Store.SHOPEE
     return Store.UNKNOWN
 
 
@@ -52,36 +40,6 @@ def extract_product_id(store: Store, text: str) -> str | None:
         path_match = re.search(r"/MLB-?(\d{6,})", text, re.IGNORECASE)
         if path_match:
             return f"MLB{path_match.group(1)}"
-    if store == Store.AMAZON:
-        asin_path = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", text, re.IGNORECASE)
-        if asin_path:
-            return asin_path.group(1).upper()
-        match = ASIN_RE.search(text)
-        if match:
-            return match.group(0).upper()
-    if store == Store.SHOPEE:
-        product_match = SHOPEE_PRODUCT_RE.search(text)
-        if product_match:
-            return f"{product_match.group(1)}.{product_match.group(2)}"
-        dot_match = SHOPEE_DOT_RE.search(text)
-        if dot_match:
-            return f"{dot_match.group(1)}.{dot_match.group(2)}"
-        try:
-            query = parse_qs(urlparse(text).query)
-            shop_id = query.get("vShopId", [None])[0] or query.get("shopid", [None])[0]
-            item_id = query.get("vItemId", [None])[0] or query.get("itemid", [None])[0]
-            if shop_id and item_id:
-                return f"{shop_id}.{item_id}"
-        except Exception:
-            return None
-    if store == Store.ALIEXPRESS:
-        match = ALIEXPRESS_ITEM_RE.search(text)
-        if match:
-            return match.group(1)
-    if store == Store.SHEIN:
-        match = SHEIN_ITEM_RE.search(text)
-        if match:
-            return match.group(1)
     return None
 
 
@@ -109,16 +67,8 @@ def strip_shared_app_text(text: str | None) -> str:
         r"\s+Somente\s+R\$\s*[\d\.,]+\.?$",
         r"\s+Por\s+apenas\s+R\$\s*[\d\.,]+\.?$",
         r"\s+Preço\s+base\s*:\s*R\$\s*[\d\.,]+\.?$",
-        r"\s+Encontre\s+na\s+Shopee\s+agora!?$",
-        r"\s+Compre\s+na\s+Shopee.*$",
         r"\s+Encontre\s+no\s+Mercado\s+Livre\s+agora!?$",
         r"\s+Confira\s+no\s+Mercado\s+Livre.*$",
-        r"\s+na\s+Amazon\s+agora!?$",
-        r"\s+Confira\s+na\s+Amazon.*$",
-        r"\s+Encontre\s+no\s+AliExpress.*$",
-        r"\s+Compre\s+no\s+AliExpress.*$",
-        r"\s+Encontre\s+na\s+SHEIN.*$",
-        r"\s+Compre\s+na\s+SHEIN.*$",
     ]
     cleaned = without_urls
     for pattern in patterns:
