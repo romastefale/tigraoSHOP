@@ -36,24 +36,31 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                     listing = await self._find_listing_data(client, None, meta.title)
             except Exception:
                 listing = {}
-            confirmed_price = self._format_price(listing.get("price"))
-            if not listing or not confirmed_price:
+
+            listing_price = self._format_price(listing.get("price"))
+            confirmed_price = meta.price or listing_price
+            if not confirmed_price:
                 return StoreResult(ok=False, error="Preço não confirmado com segurança no Mercado Livre.")
-            if meta.price and meta.price != confirmed_price:
-                return StoreResult(ok=False, error="Preço divergente entre página e consulta. Card bloqueado.")
+
+            # Em URL de produto, a página pública do próprio Mercado Livre é a fonte
+            # mais direta. A busca por título pode retornar item parecido; por isso,
+            # quando houver preço confiável nos metadados da página, ele prevalece.
+            price_source = meta.price_source or "mercadolivre_search_api_confirmed"
+            source_quality = "confirmed_page" if meta.price else "confirmed_api"
+
             card = OfferCard(
                 store=Store.MERCADOLIVRE,
-                product_id=self._string_or_none(listing.get("id")),
-                title=self._string_or_none(listing.get("title")) or meta.title,
+                product_id=self._string_or_none(listing.get("id")) or product_input.product_id,
+                title=meta.title or self._string_or_none(listing.get("title")) or "Produto Mercado Livre",
                 price=confirmed_price,
-                old_price=self._format_price(listing.get("original_price")),
-                installments=self._format_installments(listing.get("installments")),
-                image_url=self._best_image({}, listing) or meta.image_url,
+                old_price=self._format_price(listing.get("original_price")) if not meta.price else None,
+                installments=self._format_installments(listing.get("installments")) if listing_price else None,
+                image_url=meta.image_url or self._best_image({}, listing),
                 photo_file_id=product_input.photo_file_id,
                 original_url=product_input.url,
                 offer_url=str(listing.get("permalink") or product_input.url),
-                source_quality="confirmed_api",
-                price_source="mercadolivre_search_api_confirmed",
+                source_quality=source_quality,
+                price_source=price_source,
                 note="Preço confirmado automaticamente no Mercado Livre. Confira condições e disponibilidade abrindo a loja.",
             )
             return StoreResult(card=card)
