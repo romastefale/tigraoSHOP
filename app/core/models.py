@@ -40,7 +40,7 @@ class OfferCard(BaseModel):
     rating: Optional[str] = None
     shipping: Optional[str] = None
     source_quality: str = "fallback"
-    note: str = "Oferta verificada automaticamente."
+    note: str = "Confira condições e disponibilidade abrindo a loja."
 
 
 class StoreResult(BaseModel):
