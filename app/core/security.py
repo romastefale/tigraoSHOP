@@ -41,6 +41,8 @@ def is_safe_url(url: str) -> bool:
 
 def normalize_user_url(url: str) -> str:
     value = url.strip().strip("<>()[]{}.,;\n\t ")
+    while value.endswith("?") or value.endswith("&"):
+        value = value[:-1]
     if value.startswith("http://") or value.startswith("https://"):
         return value
     if value.startswith("www."):
