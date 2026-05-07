@@ -277,4 +277,4 @@ async def private_plain_text(message: Message, bot: Bot, offer_service: OfferSer
     if product_input.url or product_input.product_id:
         await _publish_offer(message, bot, offer_service, offer_repo, settings, text, force_search=False)
         return
-    await send_store_choice(message, text)
+    await send_store_choice(message, text, service=offer_service, timeout=settings.inline_timeout_seconds)
