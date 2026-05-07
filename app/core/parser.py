@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from app.core.models import ProductInput, Store
 from app.core.security import normalize_user_url
@@ -9,7 +9,8 @@ from app.core.security import normalize_user_url
 URL_RE = re.compile(r"https?://[^\s<>]+|www\.[^\s<>]+", re.IGNORECASE)
 MLB_RE = re.compile(r"\bMLB-?\d{6,}\b", re.IGNORECASE)
 ASIN_RE = re.compile(r"\bB0[A-Z0-9]{8}\b|\b\d{9}[0-9X]\b", re.IGNORECASE)
-SHOPEE_ITEM_RE = re.compile(r"(?:i\.)?(\d{6,})\.(\d{6,})")
+SHOPEE_DOT_RE = re.compile(r"(?:i\.)?(\d{5,})\.(\d{5,})")
+SHOPEE_PRODUCT_RE = re.compile(r"/product/(\d{5,})/(\d{5,})", re.IGNORECASE)
 ALIEXPRESS_ITEM_RE = re.compile(r"/(?:item/)?(\d{8,})\.html", re.IGNORECASE)
 SHEIN_ITEM_RE = re.compile(r"(?:-p-|goods_id=)(\d{5,})", re.IGNORECASE)
 
@@ -34,6 +35,8 @@ def detect_store_from_id(text: str) -> Store:
         return Store.MERCADOLIVRE
     if ASIN_RE.search(text):
         return Store.AMAZON
+    if SHOPEE_DOT_RE.search(text):
+        return Store.SHOPEE
     return Store.UNKNOWN
 
 
@@ -53,9 +56,20 @@ def extract_product_id(store: Store, text: str) -> str | None:
         if match:
             return match.group(0).upper()
     if store == Store.SHOPEE:
-        match = SHOPEE_ITEM_RE.search(text)
-        if match:
-            return f"{match.group(1)}.{match.group(2)}"
+        product_match = SHOPEE_PRODUCT_RE.search(text)
+        if product_match:
+            return f"{product_match.group(1)}.{product_match.group(2)}"
+        dot_match = SHOPEE_DOT_RE.search(text)
+        if dot_match:
+            return f"{dot_match.group(1)}.{dot_match.group(2)}"
+        try:
+            query = parse_qs(urlparse(text).query)
+            shop_id = query.get("vShopId", [None])[0] or query.get("shopid", [None])[0]
+            item_id = query.get("vItemId", [None])[0] or query.get("itemid", [None])[0]
+            if shop_id and item_id:
+                return f"{shop_id}.{item_id}"
+        except Exception:
+            return None
     if store == Store.ALIEXPRESS:
         match = ALIEXPRESS_ITEM_RE.search(text)
         if match:
