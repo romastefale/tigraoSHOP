@@ -28,8 +28,8 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                             store=Store.MERCADOLIVRE,
                             product_id=data.get("id") or product_input.product_id,
                             title=data.get("title") or "Produto Mercado Livre",
-                            price=self._format_price(listing_data.get("price") if listing_data else data.get("price")),
-                            old_price=self._format_price(data.get("original_price")),
+                            price=self._format_price((listing_data or {}).get("price") or data.get("price")),
+                            old_price=self._format_price((listing_data or {}).get("original_price") or data.get("original_price")),
                             installments=self._format_installments((listing_data or {}).get("installments")),
                             image_url=data.get("thumbnail"),
                             photo_file_id=product_input.photo_file_id,
@@ -43,16 +43,26 @@ class MercadoLivreAdapter(BaseStoreAdapter):
 
         if product_input.url:
             meta = await fetch_metadata(product_input.url, self.settings.request_timeout_seconds)
+            listing_data: dict[str, object] = {}
+            if meta.title:
+                try:
+                    async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
+                        listing_data = await self._find_listing_data(client, None, meta.title)
+                except Exception:
+                    listing_data = {}
+            offer_url = str(listing_data.get("permalink") or product_input.url)
             card = OfferCard(
                 store=Store.MERCADOLIVRE,
-                product_id=product_input.product_id,
-                title=meta.title or "Oferta Mercado Livre",
-                price=self._format_price(meta.price),
-                image_url=meta.image_url,
+                product_id=product_input.product_id or self._string_or_none(listing_data.get("id")),
+                title=self._string_or_none(listing_data.get("title")) or meta.title or "Oferta Mercado Livre",
+                price=self._format_price(listing_data.get("price") or meta.price),
+                old_price=self._format_price(listing_data.get("original_price")),
+                installments=self._format_installments(listing_data.get("installments")),
+                image_url=self._string_or_none(listing_data.get("thumbnail")) or meta.image_url,
                 photo_file_id=product_input.photo_file_id,
                 original_url=product_input.url,
-                offer_url=product_input.url,
-                source_quality="metadata",
+                offer_url=offer_url,
+                source_quality="api" if listing_data else "metadata",
             )
             return StoreResult(card=card)
 
@@ -111,6 +121,12 @@ class MercadoLivreAdapter(BaseStoreAdapter):
             if results:
                 return results[0]
         return {}
+
+    @staticmethod
+    def _string_or_none(value: object) -> str | None:
+        if value in (None, ""):
+            return None
+        return str(value)
 
     @staticmethod
     def _format_price(value: object) -> str | None:
