@@ -1,26 +1,32 @@
 # tigraoSHOP
 
-Bot Telegram agregador de ofertas para Shopee, Mercado Livre, Amazon, AliExpress e SHEIN.
+Bot Telegram agregador de ofertas em modo conservador para Mercado Livre.
 
-Base funcional criada com Python 3.12, aiogram 3.27, FastAPI webhook, SQLite assíncrono, modo inline rápido e arquitetura modular por loja. O foco é buscar, montar e enviar ofertas de forma limpa, sem camada de comissão ou afiliados.
+Base funcional criada com Python 3.12, aiogram 3.27, FastAPI webhook, SQLite assíncrono, modo inline rápido e arquitetura modular por loja. O foco atual é publicar somente ofertas do Mercado Livre com preço confirmado, sem camada de comissão ou afiliados.
 
-## O que já faz
+## Modo atual
 
-- Recebe link, ID de produto ou termo de busca.
+- Funciona apenas com Mercado Livre.
+- Recebe link, ID de produto ou termo de busca do Mercado Livre.
 - Funciona no privado com texto comum.
-- Funciona em grupo com `/of link`, `/of ID` e `/s termo`.
+- Funciona em grupo com `/of link`, `/of MLB1234567890` e `/s termo`.
 - Aceita reply de foto com `/of link` para usar a imagem respondida como destaque.
 - Gera card HTML com o nome do produto em hyperlink.
-- Usa botão principal com o nome da loja correspondente.
+- Usa botão principal com o nome da loja.
 - Usa botão `Copiar link` em estilo azul quando suportado pelo cliente/API.
 - Usa botão `Similares` em estilo vermelho quando suportado pelo cliente/API.
 - Não usa botão público de remover oferta.
 - Tenta apagar o comando original apenas quando o bot for admin e tiver permissão de apagar mensagens.
 - Não envia mensagens intermediárias no grupo.
 - Tem modo inline com resposta curta e cache.
-- Usa Mercado Livre por API pública quando possível.
-- Usa Shopee, Amazon, AliExpress e SHEIN por link/metadados nesta primeira base.
-- Envia sempre o link original/resolvido da loja, sem parâmetros de afiliado.
+- Bloqueia publicação quando o preço não for confirmado com segurança.
+- Outras lojas ficam desabilitadas até expansão futura com validação própria de preço.
+
+## Regra de preço
+
+O bot só publica card quando consegue obter preço confirmado no Mercado Livre.
+
+Para link sem ID direto, ele tenta ler metadados da página e confirmar a oferta via consulta pública do Mercado Livre. Se houver divergência entre fontes, ausência de preço ou falha de leitura, o card é bloqueado e o usuário recebe aviso.
 
 ## Comandos
 
@@ -36,8 +42,8 @@ Exemplos:
 ```text
 /of https://www.mercadolivre.com.br/produto
 /of MLB1234567890
-/of B0ABCDEFGH
 /s air fryer 5l
+/s mercado livre fone bluetooth
 ```
 
 ## Inline mode
@@ -51,7 +57,7 @@ Depois use:
 @SeuBot mercado livre fone bluetooth
 ```
 
-O inline responde primeiro com cache local. Se não houver cache, faz busca rápida nos adaptadores configurados com timeout curto.
+O inline responde apenas com resultados do Mercado Livre que tenham preço disponível.
 
 ## Grupo sem admin
 
@@ -62,7 +68,7 @@ O bot funciona sem ser administrador usando comandos normais:
 /s termo
 ```
 
-Sem permissão de admin, ele não tenta apagar mensagem do usuário. Publica somente o card final.
+Sem permissão de admin, ele não tenta apagar mensagem do usuário. Publica somente o card final quando o preço estiver confirmado.
 
 ## Grupo com admin
 
@@ -144,25 +150,17 @@ app/
   services/
     offer_service.py
   stores/
-    aliexpress_store.py
-    amazon_store.py
     base.py
-    generic.py
     mercadolivre.py
     registry.py
-    shein_store.py
-    shopee_store.py
 tests/
 ```
 
 ## Estado dos adaptadores
 
-- Mercado Livre: busca e item via API pública quando possível.
-- Amazon: link/ASIN e metadados.
-- AliExpress: link/ID e metadados.
-- Shopee: link e metadados.
-- SHEIN: link e metadados.
+- Mercado Livre: habilitado.
+- Shopee, Amazon, AliExpress e SHEIN: desabilitados temporariamente para evitar publicação com preço incerto.
 
 ## Observação técnica
 
-A base não faz scraping agressivo. Quando uma loja não fornecer dados suficientes por metadados, o card usa fallback seguro com título genérico e link final. Isso evita quebrar o bot em público por bloqueio de página, timeout ou mudança de HTML.
+A base não faz scraping agressivo. Quando não houver confirmação de preço, o bot não publica o card. Isso prioriza precisão sobre quantidade de ofertas.
