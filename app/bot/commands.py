@@ -86,6 +86,8 @@ async def _resolve_product_input(payload: str, photo_file_id: str | None, force_
         resolved_url = await resolve_url(product_input.url, settings.request_timeout_seconds)
         if resolved_url and resolved_url != product_input.url:
             resolved_input = parse_offer_input(resolved_url, photo_file_id=photo_file_id, force_search=force_search)
+            resolved_input.raw_text = product_input.raw_text or resolved_input.raw_text
+            resolved_input.query = product_input.query or resolved_input.query
             if resolved_input.product_id or resolved_input.store != product_input.store:
                 return resolved_input
             product_input.url = resolved_url
