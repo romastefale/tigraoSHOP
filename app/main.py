@@ -11,7 +11,6 @@ from fastapi import FastAPI, HTTPException, Request
 from app.bot.router import build_router
 from app.config import Settings, get_settings
 from app.db.repo import OfferRepository
-from app.services.affiliate import AffiliateService
 from app.services.offer_service import OfferService
 from app.stores.registry import build_adapters
 
@@ -26,8 +25,7 @@ bot = (
 )
 dp = Dispatcher()
 repo = OfferRepository(settings.database_url)
-affiliate = AffiliateService(settings)
-offer_service = OfferService(build_adapters(settings, affiliate), repo)
+offer_service = OfferService(build_adapters(settings), repo)
 
 # Dependencies injected into aiogram handlers.
 dp["settings"] = settings
