@@ -18,6 +18,25 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="./data/offers.db", alias="DATABASE_URL")
 
+    # Official marketplace API credentials. All are optional.
+    # The bot uses an official API only when the required credentials are present.
+    mercadolivre_access_token: str = Field(default="", alias="MERCADOLIVRE_ACCESS_TOKEN")
+
+    amazon_access_key: str = Field(default="", alias="AMAZON_ACCESS_KEY")
+    amazon_secret_key: str = Field(default="", alias="AMAZON_SECRET_KEY")
+    amazon_partner_tag: str = Field(default="", alias="AMAZON_PARTNER_TAG")
+    amazon_marketplace: str = Field(default="www.amazon.com.br", alias="AMAZON_MARKETPLACE")
+
+    aliexpress_app_key: str = Field(default="", alias="ALIEXPRESS_APP_KEY")
+    aliexpress_app_secret: str = Field(default="", alias="ALIEXPRESS_APP_SECRET")
+    aliexpress_tracking_id: str = Field(default="", alias="ALIEXPRESS_TRACKING_ID")
+
+    shopee_partner_id: str = Field(default="", alias="SHOPEE_PARTNER_ID")
+    shopee_partner_key: str = Field(default="", alias="SHOPEE_PARTNER_KEY")
+
+    shein_app_key: str = Field(default="", alias="SHEIN_APP_KEY")
+    shein_app_secret: str = Field(default="", alias="SHEIN_APP_SECRET")
+
     request_timeout_seconds: float = Field(default=4.0, alias="REQUEST_TIMEOUT_SECONDS")
     inline_timeout_seconds: float = Field(default=1.2, alias="INLINE_TIMEOUT_SECONDS")
     inline_cache_time: int = Field(default=30, alias="INLINE_CACHE_TIME")
