@@ -4,7 +4,7 @@ import hashlib
 
 from aiogram import Router
 from aiogram.enums import ParseMode
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResultArticle, InputTextMessageContent
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResultArticle, InlineQueryResultPhoto, InputTextMessageContent
 
 from app.bot.keyboards import mercadolivre_search_url
 from app.bot.render import STORE_LABELS, render_offer_html
@@ -53,6 +53,22 @@ def _article_from_card(card: OfferCard) -> InlineQueryResultArticle:
     )
 
 
+def _photo_from_card(card: OfferCard) -> InlineQueryResultPhoto:
+    store_name = STORE_LABELS.get(card.store, card.store.value)
+    clean_title = main_product_name(card.title, max_chars=70)
+    image_url = card.image_url or ""
+    return InlineQueryResultPhoto(
+        id=_stable_id(image_url + card.title),
+        photo_url=image_url,
+        thumbnail_url=image_url,
+        title=f"{store_name} · {clean_title}"[:64],
+        description=_description(card),
+        caption=render_offer_html(card),
+        parse_mode=ParseMode.HTML,
+        reply_markup=_button_url(mercadolivre_search_url(card.title), store_name),
+    )
+
+
 @router.inline_query()
 async def inline_query_handler(query: InlineQuery, offer_service: OfferService, settings: Settings) -> None:
     term = (query.query or "").strip()
@@ -70,8 +86,9 @@ async def inline_query_handler(query: InlineQuery, offer_service: OfferService, 
         await query.answer(results=[], cache_time=5, is_personal=True)
         return
 
+    inline_result = _photo_from_card(result.card) if result.card.image_url else _article_from_card(result.card)
     await query.answer(
-        results=[_article_from_card(result.card)],
+        results=[inline_result],
         cache_time=settings.inline_cache_time,
         is_personal=True,
     )
