@@ -5,16 +5,14 @@ import httpx
 from app.config import Settings
 from app.core.metadata import fetch_metadata
 from app.core.models import OfferCard, ProductInput, SearchResult, Store, StoreResult
-from app.services.affiliate import AffiliateService
 from app.stores.base import BaseStoreAdapter
 
 
 class MercadoLivreAdapter(BaseStoreAdapter):
     name = "Mercado Livre"
 
-    def __init__(self, settings: Settings, affiliate: AffiliateService) -> None:
+    def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.affiliate = affiliate
 
     async def get_offer(self, product_input: ProductInput) -> StoreResult:
         if product_input.product_id:
@@ -34,7 +32,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                             image_url=data.get("thumbnail"),
                             photo_file_id=product_input.photo_file_id,
                             original_url=permalink,
-                            affiliate_url=self.affiliate.convert(Store.MERCADOLIVRE, permalink),
+                            affiliate_url=permalink,
                             source_quality="api",
                         )
                         return StoreResult(card=card)
@@ -51,7 +49,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                 image_url=meta.image_url,
                 photo_file_id=product_input.photo_file_id,
                 original_url=product_input.url,
-                affiliate_url=self.affiliate.convert(Store.MERCADOLIVRE, product_input.url),
+                affiliate_url=product_input.url,
                 source_quality="metadata",
             )
             return StoreResult(card=card)
@@ -78,7 +76,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
             results.append(
                 SearchResult(
                     title=item.get("title") or "Produto Mercado Livre",
-                    url=self.affiliate.convert(Store.MERCADOLIVRE, url),
+                    url=url,
                     store=Store.MERCADOLIVRE,
                     price=self._format_price(item.get("price")),
                     product_id=item.get("id"),
