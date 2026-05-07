@@ -32,7 +32,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                             image_url=data.get("thumbnail"),
                             photo_file_id=product_input.photo_file_id,
                             original_url=permalink,
-                            affiliate_url=permalink,
+                            offer_url=permalink,
                             source_quality="api",
                         )
                         return StoreResult(card=card)
@@ -49,7 +49,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                 image_url=meta.image_url,
                 photo_file_id=product_input.photo_file_id,
                 original_url=product_input.url,
-                affiliate_url=product_input.url,
+                offer_url=product_input.url,
                 source_quality="metadata",
             )
             return StoreResult(card=card)
