@@ -57,6 +57,19 @@ def is_mercadolivre_url(url: str) -> bool:
     return "mercadolivre" in host or "mercadolibre" in host or "meli." in host
 
 
+def normalize_ml_image_url(url: str | None) -> str | None:
+    if not url or not isinstance(url, str) or not url.startswith("http"):
+        return None
+    value = url.replace("http://", "https://").strip()
+    if "mlstatic.com" not in value:
+        return value
+    value = value.split("?", 1)[0]
+    value = re.sub(r"/D_[A-Z]{2}_NP_\dX_", "/D_NQ_NP_2X_", value)
+    value = re.sub(r"/D_[A-Z]{2}_NP_", "/D_NQ_NP_2X_", value)
+    value = re.sub(r"-[A-Z](?:\.webp|\.jpg|\.jpeg|\.png)$", "-F.webp", value, flags=re.IGNORECASE)
+    return value
+
+
 def clean_item_id(value: str | None) -> str | None:
     if not value:
         return None
@@ -100,10 +113,8 @@ def _find_title(content: str) -> str | None:
 
 
 def _find_image(content: str) -> str | None:
-    image = _find_meta(content, "og:image") or _find_meta(content, "twitter:image")
-    if image and image.startswith("http"):
-        return image
-    return None
+    image = _find_meta(content, "og:image",) or _find_meta(content, "twitter:image")
+    return normalize_ml_image_url(image)
 
 
 def _parse_price(value: object) -> float | None:
