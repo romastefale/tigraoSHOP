@@ -11,8 +11,10 @@ Base funcional criada com Python 3.12, aiogram 3.27, FastAPI webhook, SQLite ass
 - Funciona em grupo com `/of link`, `/of ID` e `/s termo`.
 - Aceita reply de foto com `/of link` para usar a imagem respondida como destaque.
 - Gera card HTML com o nome do produto em hyperlink.
-- Usa botões de oferta com `style` verde, azul e vermelho quando suportado pelo cliente/API.
-- Usa botão de copiar link com fallback para abrir URL.
+- Usa botão principal com o nome da loja correspondente.
+- Usa botão `Copiar link` em estilo azul quando suportado pelo cliente/API.
+- Usa botão `Similares` em estilo vermelho quando suportado pelo cliente/API.
+- Não usa botão público de remover oferta.
 - Tenta apagar o comando original apenas quando o bot for admin e tiver permissão de apagar mensagens.
 - Não envia mensagens intermediárias no grupo.
 - Tem modo inline com resposta curta e cache.
@@ -125,7 +127,6 @@ app/
   main.py
   config.py
   bot/
-    callbacks.py
     commands.py
     inline.py
     keyboards.py
