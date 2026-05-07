@@ -24,6 +24,7 @@ class ProductInput(BaseModel):
     url: Optional[str] = None
     product_id: Optional[str] = None
     query: Optional[str] = None
+    shared_price: Optional[str] = None
     photo_file_id: Optional[str] = None
 
 
