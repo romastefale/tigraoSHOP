@@ -19,7 +19,7 @@ def detect_store_from_url(url: str) -> Store:
     host = (urlparse(url).netloc or "").lower()
     if "mercadolivre" in host or "mercadolibre" in host or "meli" in host:
         return Store.MERCADOLIVRE
-    if "shopee" in host:
+    if "shopee" in host or "shp.ee" in host:
         return Store.SHOPEE
     if "amazon" in host or host in {"a.co", "amzn.to"} or "amzn." in host:
         return Store.AMAZON
@@ -81,9 +81,30 @@ def extract_product_id(store: Store, text: str) -> str | None:
     return None
 
 
+def strip_shared_app_text(text: str | None) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    without_urls = URL_RE.sub("", raw)
+    patterns = [
+        r"^Confira\s+",
+        r"\s+com\s+\d+%\s+de\s+desconto!?$",
+        r"\s+Somente\s+R\$\s*[\d\.,]+\.?$",
+        r"\s+Encontre\s+na\s+Shopee\s+agora!?$",
+        r"\s+Encontre\s+no\s+Mercado\s+Livre\s+agora!?$",
+        r"\s+na\s+Amazon\s+agora!?$",
+    ]
+    cleaned = without_urls
+    for pattern in patterns:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -–—|,.;!\n\t ")
+    return cleaned or raw
+
+
 def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_search: bool = False) -> ProductInput:
     raw = (text or "").strip()
     url_match = URL_RE.search(raw)
+    cleaned_query = strip_shared_app_text(raw)
     if url_match:
         url = normalize_user_url(url_match.group(0))
         store = detect_store_from_url(url)
@@ -93,6 +114,7 @@ def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_
             raw_text=raw,
             url=url,
             product_id=extract_product_id(store, url),
+            query=cleaned_query if cleaned_query and cleaned_query != url else None,
             photo_file_id=photo_file_id,
         )
 
@@ -104,6 +126,7 @@ def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_
             store=store,
             raw_text=raw,
             product_id=product_id,
+            query=cleaned_query or None,
             photo_file_id=photo_file_id,
         )
 
@@ -111,6 +134,6 @@ def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_
         source="search" if force_search or raw else "empty",
         store=Store.UNKNOWN,
         raw_text=raw,
-        query=raw or None,
+        query=cleaned_query or raw or None,
         photo_file_id=photo_file_id,
     )
