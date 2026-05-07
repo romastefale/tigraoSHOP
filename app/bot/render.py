@@ -25,7 +25,8 @@ def render_offer_html(card: OfferCard) -> str:
         lines.append(price_line)
     else:
         lines.append("💰 <b>Preço no link da oferta</b>")
-    lines.append(f"🏬 {STORE_LABELS.get(card.store, card.store.value)}")
+    if card.installments:
+        lines.append(f"💳 {escape(card.installments)}")
     if card.shipping:
         lines.append(f"🚚 {escape(card.shipping)}")
     if card.rating:
