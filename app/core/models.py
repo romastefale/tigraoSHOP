@@ -31,6 +31,7 @@ class OfferCard(BaseModel):
     title: str
     price: Optional[str] = None
     old_price: Optional[str] = None
+    installments: Optional[str] = None
     currency: str = "BRL"
     image_url: Optional[str] = None
     photo_file_id: Optional[str] = None
@@ -53,5 +54,6 @@ class SearchResult(BaseModel):
     url: str
     store: Store
     price: Optional[str] = None
+    installments: Optional[str] = None
     product_id: Optional[str] = None
     image_url: Optional[str] = None
