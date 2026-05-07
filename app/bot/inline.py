@@ -67,13 +67,7 @@ def _article_from_search(result: SearchResult) -> InlineQueryResultArticle:
 async def inline_query_handler(query: InlineQuery, offer_service: OfferService, settings: Settings) -> None:
     term = (query.query or "").strip()
     if not term:
-        await query.answer(
-            results=[],
-            cache_time=5,
-            is_personal=True,
-            switch_pm_text="Digite produto, link ou ID",
-            switch_pm_parameter="start",
-        )
+        await query.answer(results=[], cache_time=5, is_personal=True)
         return
 
     raw_results = await offer_service.search(term, limit=8, timeout=settings.inline_timeout_seconds)
