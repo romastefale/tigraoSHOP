@@ -82,8 +82,8 @@ async def _publish_offer(
             return
         card = result.card
 
-    await repo.save_offer(card)
-    markup = offer_keyboard(card)
+    offer_id = await repo.save_offer(card)
+    markup = offer_keyboard(card, offer_id=offer_id)
     html = render_offer_html(card)
 
     if await can_delete_in_chat(bot, message, settings):
