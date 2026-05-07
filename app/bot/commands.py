@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType, ParseMode
 from aiogram.filters import Command, CommandStart
@@ -46,7 +48,12 @@ A foto respondida será usada como imagem principal do post.
 Digite em qualquer conversa:
 <code>@seu_bot produto</code>
 
-Eu retorno resultados rápidos com loja, produto e preço quando a loja permitir obter o valor."""
+Eu retorno resultados rápidos com loja, produto e preço quando a loja permitir obter o valor.
+
+<b>Menção em grupo</b>
+Quando o Telegram entregar a mensagem ao bot, também funciona:
+<code>@seu_bot link</code>
+<code>@seu_bot nome do produto</code>"""
 
 START_TEXT = """<b>tigraoSHOP pronto.</b>
 
@@ -106,6 +113,13 @@ def _effective_payload(message: Message, payload: str) -> str:
     if message.reply_to_message:
         return message.reply_to_message.text or message.reply_to_message.caption or ""
     return payload
+
+
+def _strip_bot_mention(text: str, bot_username: str) -> str:
+    username = bot_username.lstrip("@").strip()
+    if not username:
+        return text.strip()
+    return re.sub(rf"@{re.escape(username)}\b", "", text, flags=re.IGNORECASE).strip()
 
 
 async def _resolve_product_input(payload: str, photo_file_id: str | None, force_search: bool, settings: Settings):
@@ -225,6 +239,27 @@ async def search_cmd(message: Message, offer_service: OfferService, settings: Se
         await send_store_choice(message, query)
         return
 
+    await send_search_results(message, offer_service, query, store=store, timeout=settings.inline_timeout_seconds)
+
+
+@router.message(F.chat.type != ChatType.PRIVATE, F.text)
+async def group_mention_text(message: Message, bot: Bot, offer_service: OfferService, offer_repo: OfferRepository, settings: Settings) -> None:
+    text = message.text or ""
+    username = settings.bot_username.lstrip("@").lower()
+    if not username or f"@{username}" not in text.lower():
+        return
+
+    payload = _strip_bot_mention(text, settings.bot_username)
+    if not payload:
+        await message.reply("Envie um link ou produto junto com a menção.", link_preview_options=NO_PREVIEW)
+        return
+
+    product_input = parse_offer_input(payload, force_search=False)
+    if product_input.url or product_input.product_id:
+        await _publish_offer(message, bot, offer_service, offer_repo, settings, payload, force_search=False)
+        return
+
+    query, store = parse_store_search(payload)
     await send_search_results(message, offer_service, query, store=store, timeout=settings.inline_timeout_seconds)
 
 
