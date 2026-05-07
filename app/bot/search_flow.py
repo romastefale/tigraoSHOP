@@ -33,7 +33,7 @@ def parse_store_search(payload: str) -> tuple[str, Store | None]:
     return text, Store.MERCADOLIVRE
 
 
-async def send_store_choice(message: Message, query: str) -> None:
+async def send_store_choice(message: Message, query: str, service: OfferService | None = None, timeout: float = 1.2) -> None:
     cleaned = main_product_name(query, max_chars=60)
     text = (
         "Por enquanto estou funcionando só com Mercado Livre.\n\n"
@@ -43,7 +43,8 @@ async def send_store_choice(message: Message, query: str) -> None:
         "<code>/of link-do-mercado-livre</code>"
     )
     await message.answer(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
-    await send_search_results(message, None, query, store=Store.MERCADOLIVRE)
+    if service is not None:
+        await send_search_results(message, service, query, store=Store.MERCADOLIVRE, timeout=timeout)
 
 
 async def send_search_results(
