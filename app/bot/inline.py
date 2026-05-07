@@ -9,7 +9,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQuer
 
 from app.bot.render import STORE_LABELS, render_offer_html, render_search_result
 from app.config import Settings
-from app.core.models import OfferCard, SearchResult
+from app.core.models import OfferCard, SearchResult, Store
 from app.core.titles import main_product_name
 from app.services.offer_service import OfferService
 
@@ -29,7 +29,7 @@ def _button_url(url: str, label: str) -> InlineKeyboardMarkup:
 
 
 def _description(price: str | None, installments: str | None) -> str:
-    description = f"{price} à vista" if price else "Preço disponível abrindo a loja"
+    description = f"{price} à vista" if price else "Preço não confirmado"
     if installments:
         description += f" · {installments}"
     return description[:120]
@@ -59,13 +59,10 @@ def _article_from_search(result: SearchResult) -> InlineQueryResultArticle:
     if result.installments:
         summary += f" · {result.installments}"
     text = f'🛍 <a href="{escape(result.url, quote=True)}">{escape(clean_title)}</a>\n\n'
-    if result.price:
-        text += f"💰 <b>{escape(result.price)}</b> à vista\n"
-    else:
-        text += "💰 <b>Preço disponível abrindo a loja</b>\n"
+    text += f"💰 <b>{escape(result.price or 'Preço confirmado indisponível')}</b> à vista\n"
     if result.installments:
         text += f"💳 {escape(result.installments)}\n"
-    text += "\nConfira condições e disponibilidade abrindo a loja."
+    text += "\nPreço confirmado automaticamente no Mercado Livre. Confira condições e disponibilidade abrindo a loja."
     return InlineQueryResultArticle(
         id=_stable_id(result.url + result.title),
         title=f"{store_name} · {clean_title}"[:64],
@@ -86,12 +83,13 @@ async def inline_query_handler(query: InlineQuery, offer_service: OfferService, 
         await query.answer(results=[], cache_time=5, is_personal=True)
         return
 
-    raw_results = await offer_service.search(term, limit=8, timeout=settings.inline_timeout_seconds)
+    raw_results = await offer_service.search(term, limit=8, timeout=settings.inline_timeout_seconds, stores=[Store.MERCADOLIVRE])
     articles = []
     for item in raw_results:
         if isinstance(item, OfferCard):
-            articles.append(_article_from_card(item))
-        else:
+            if item.store == Store.MERCADOLIVRE and item.price:
+                articles.append(_article_from_card(item))
+        elif item.store == Store.MERCADOLIVRE and item.price:
             articles.append(_article_from_search(item))
 
     await query.answer(
