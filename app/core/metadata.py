@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -48,7 +49,9 @@ def _format_brl(value: object) -> str | None:
     try:
         number = float(text.replace(".", "").replace(",", ".") if "," in text else text)
     except ValueError:
-        return text
+        return None
+    if number <= 0:
+        return None
     formatted = f"R$ {number:,.2f}"
     return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -64,20 +67,58 @@ def _walk_json(value: Any) -> list[Any]:
     return nodes
 
 
-def _find_jsonld_price(content: str) -> str | None:
+def _jsonld_type(node: dict[str, Any]) -> set[str]:
+    raw_type = node.get("@type") or node.get("type")
+    if isinstance(raw_type, list):
+        return {str(item).lower() for item in raw_type}
+    if raw_type:
+        return {str(raw_type).lower()}
+    return set()
+
+
+def _find_jsonld_image(content: str) -> str | None:
+    for data in _iter_jsonld(content):
+        for node in _walk_json(data):
+            if not isinstance(node, dict):
+                continue
+            image = node.get("image") or node.get("thumbnailUrl")
+            if isinstance(image, str) and image.startswith("http"):
+                return image
+            if isinstance(image, list):
+                for item in image:
+                    if isinstance(item, str) and item.startswith("http"):
+                        return item
+                    if isinstance(item, dict):
+                        url = item.get("url") or item.get("contentUrl")
+                        if isinstance(url, str) and url.startswith("http"):
+                            return url
+    return None
+
+
+def _iter_jsonld(content: str) -> list[Any]:
     scripts = re.findall(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
         content,
         flags=re.IGNORECASE | re.DOTALL,
     )
+    parsed: list[Any] = []
     for raw_script in scripts:
         cleaned = html.unescape(raw_script).strip()
         try:
-            data = json.loads(cleaned)
+            parsed.append(json.loads(cleaned))
         except json.JSONDecodeError:
             continue
+    return parsed
+
+
+def _find_jsonld_price(content: str) -> str | None:
+    for data in _iter_jsonld(content):
         for node in _walk_json(data):
             if not isinstance(node, dict):
+                continue
+            node_types = _jsonld_type(node)
+            is_product_or_offer = bool(node_types & {"product", "offer", "aggregateoffer"})
+            if not is_product_or_offer and not any(key in node for key in ("offers", "priceSpecification")):
                 continue
             price = node.get("price") or node.get("lowPrice") or node.get("highPrice")
             currency = node.get("priceCurrency") or node.get("currency")
@@ -85,26 +126,32 @@ def _find_jsonld_price(content: str) -> str | None:
                 formatted = _format_brl(price)
                 if formatted and (not currency or str(currency).upper() in {"BRL", "R$"}):
                     return formatted
-                return formatted
     return None
 
 
-def _find_regex_price(content: str) -> str | None:
-    patterns = [
-        r'"price"\s*:\s*"?(\d{2,7}(?:[\.,]\d{2})?)"?',
-        r'"amount"\s*:\s*"?(\d{2,7}(?:[\.,]\d{2})?)"?',
-        r'R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}',
-        r'R\$\s*\d{2,7},\d{2}',
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, content, re.IGNORECASE)
-        if not match:
-            continue
-        value = match.group(1) if match.groups() else match.group(0)
-        formatted = _format_brl(value)
-        if formatted:
-            return formatted
-    return None
+def _is_safe_product_price_context(url: str, content: str) -> bool:
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    host = parsed.netloc.lower()
+    blocked_paths = ("/social/", "/loja/", "/stores/", "/search", "/lista/", "/ofertas")
+    if any(part in path for part in blocked_paths):
+        return False
+    if "mercadolivre" in host and "/p/" not in path and not re.search(r"/MLB-?\d+", path, re.IGNORECASE):
+        return False
+    product_markers = (
+        'property="product:price:amount"',
+        "property='product:price:amount'",
+        '"@type":"Product"',
+        '"@type": "Product"',
+        '"@type":"Offer"',
+        '"@type": "Offer"',
+    )
+    return any(marker in content for marker in product_markers)
+
+
+def _trusted_meta_price(content: str) -> str | None:
+    raw = _find_meta(content, "product:price:amount", "og:price:amount")
+    return _format_brl(raw)
 
 
 async def fetch_metadata(url: str, timeout: float = 4.0) -> PageMetadata:
@@ -118,16 +165,18 @@ async def fetch_metadata(url: str, timeout: float = 4.0) -> PageMetadata:
             },
         ) as client:
             response = await client.get(url)
+            final_url = str(response.url)
             content = response.text[:600_000]
     except Exception:
         return PageMetadata()
 
+    image_url = _find_meta(content, "og:image", "twitter:image") or _find_jsonld_image(content)
+    price = None
+    if _is_safe_product_price_context(final_url, content):
+        price = _trusted_meta_price(content) or _find_jsonld_price(content)
+
     return PageMetadata(
         title=_find_meta(content, "og:title", "twitter:title") or _find_title(content),
-        image_url=_find_meta(content, "og:image", "twitter:image"),
-        price=(
-            _find_meta(content, "product:price:amount", "og:price:amount", "price", "twitter:data1")
-            or _find_jsonld_price(content)
-            or _find_regex_price(content)
-        ),
+        image_url=image_url,
+        price=price,
     )
