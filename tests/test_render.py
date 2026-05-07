@@ -9,7 +9,7 @@ def test_render_offer_hyperlinks_product_name() -> None:
         title="Produto <teste>",
         price="R$ 99,90",
         old_price="R$ 129,90",
-        affiliate_url="https://mercadolivre.com.br/oferta?x=1",
+        offer_url="https://mercadolivre.com.br/oferta?x=1",
         original_url="https://mercadolivre.com.br/oferta",
     )
     html = render_offer_html(card)
