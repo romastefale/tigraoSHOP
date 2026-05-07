@@ -10,6 +10,7 @@ STORE_LABELS = {
     Store.MERCADOLIVRE: "Mercado Livre",
     Store.AMAZON: "Amazon",
     Store.ALIEXPRESS: "AliExpress",
+    Store.MAGALU: "Magalu",
     Store.SHEIN: "SHEIN",
     Store.UNKNOWN: "Loja",
 }
