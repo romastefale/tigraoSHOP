@@ -23,24 +23,25 @@ NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 HELP_TEXT = """<b>Como usar o tigraoSHOP</b>
 
-<b>Enviar oferta pronta</b>
-Cole um link de produto no privado ou use no grupo:
-<code>/of link-do-produto</code>
+Por enquanto estou funcionando apenas com <b>Mercado Livre</b>.
 
-Funciona com links normais e links curtos conhecidos de Shopee, Mercado Livre, Amazon, AliExpress e SHEIN.
+<b>Enviar oferta pronta</b>
+Cole um link do Mercado Livre no privado ou use no grupo:
+<code>/of link-do-mercado-livre</code>
+
+Também aceito ID de anúncio:
+<code>/of MLB1234567890</code>
 
 <b>Pesquisar ofertas</b>
 No privado ou no grupo:
 <code>/s fone bluetooth</code>
 <code>/s mercado livre fone bluetooth</code>
-<code>/s shopee drone</code>
-<code>/s amazon carregador usb-c</code>
 
-No privado, quando você não escolher a loja, eu mostro botões para pesquisar em todas ou em uma loja específica.
+Só mostro resultados com preço confirmado. Se o preço não for confirmado com segurança, eu não publico o card.
 
 <b>Imagem de destaque</b>
 Responda uma foto com:
-<code>/of link-do-produto</code>
+<code>/of link-do-mercado-livre</code>
 
 A foto respondida será usada como imagem principal do post.
 
@@ -48,24 +49,19 @@ A foto respondida será usada como imagem principal do post.
 Digite em qualquer conversa:
 <code>@seu_bot produto</code>
 
-Eu retorno resultados rápidos com loja, produto e preço quando a loja permitir obter o valor.
-
-<b>Menção em grupo</b>
-Quando o Telegram entregar a mensagem ao bot, também funciona:
-<code>@seu_bot link</code>
-<code>@seu_bot nome do produto</code>"""
+O inline também pesquisa apenas Mercado Livre."""
 
 START_TEXT = """<b>tigraoSHOP pronto.</b>
 
-Eu transformo links e buscas em posts limpos de oferta.
+Hoje estou tímido: só Mercado Livre, com foco em preço confirmado.
 
 Você pode começar de três formas:
 
-1. Cole um link de produto aqui no privado.
-2. Pesquise com <code>/s nome do produto</code>.
-3. No grupo, use <code>/of link</code> ou <code>/s produto</code>.
+1. Cole um link do Mercado Livre aqui no privado.
+2. Use <code>/of link-do-mercado-livre</code>.
+3. Pesquise com <code>/s nome do produto</code>.
 
-Para escolher a loja na busca privada, use <code>/s produto</code> e toque nos botões."""
+Se o preço não for confirmado com segurança, eu bloqueio a publicação."""
 
 
 def _command_payload(message: Message) -> str:
@@ -175,11 +171,11 @@ async def _publish_offer(
 
     if product_input.source in {"empty", "search"}:
         if not product_input.query and not payload:
-            await message.reply("Envie link, ID ou termo de busca.", link_preview_options=NO_PREVIEW)
+            await message.reply("Envie link, ID do Mercado Livre ou termo de busca.", link_preview_options=NO_PREVIEW)
             return
         results = await service.search(product_input.query or payload, limit=5, timeout=settings.inline_timeout_seconds)
         if not results:
-            await message.reply("Não encontrei oferta para essa busca.", link_preview_options=NO_PREVIEW)
+            await message.reply("Não encontrei preço confirmado no Mercado Livre para essa busca.", link_preview_options=NO_PREVIEW)
             return
         first = results[0]
         if hasattr(first, "offer_url"):
@@ -188,7 +184,7 @@ async def _publish_offer(
             product_input = _input_from_search_result(first, photo_file_id)
             result = await service.build_offer(product_input)
             if not result.card:
-                await message.reply("Encontrei resultado, mas não consegui montar o card.", link_preview_options=NO_PREVIEW)
+                await message.reply(result.error or "Encontrei resultado, mas não consegui confirmar o preço.", link_preview_options=NO_PREVIEW)
                 return
             card = result.card
     else:
@@ -231,14 +227,10 @@ async def offer_cmd(message: Message, bot: Bot, offer_service: OfferService, off
 async def search_cmd(message: Message, offer_service: OfferService, settings: Settings) -> None:
     payload = _command_payload(message)
     if not payload:
-        await message.reply("Use <code>/s nome do produto</code> ou <code>/s loja produto</code>.", parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await message.reply("Use <code>/s nome do produto</code> ou <code>/s mercado livre produto</code>.", parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
         return
 
     query, store = parse_store_search(payload)
-    if message.chat.type == ChatType.PRIVATE and store is None:
-        await send_store_choice(message, query)
-        return
-
     await send_search_results(message, offer_service, query, store=store, timeout=settings.inline_timeout_seconds)
 
 
@@ -251,7 +243,7 @@ async def group_mention_text(message: Message, bot: Bot, offer_service: OfferSer
 
     payload = _strip_bot_mention(text, settings.bot_username)
     if not payload:
-        await message.reply("Envie um link ou produto junto com a menção.", link_preview_options=NO_PREVIEW)
+        await message.reply("Envie um link ou produto do Mercado Livre junto com a menção.", link_preview_options=NO_PREVIEW)
         return
 
     product_input = parse_offer_input(payload, force_search=False)
