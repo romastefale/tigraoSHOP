@@ -15,10 +15,10 @@ class OfferService:
 
     async def build_offer(self, product_input: ProductInput) -> StoreResult:
         if product_input.store == Store.UNKNOWN:
-            return StoreResult(ok=False, error="Não consegui identificar a loja. Envie link ou ID completo.")
+            return StoreResult(ok=False, error="Por enquanto estou tímido: envie link ou ID do Mercado Livre.")
         adapter = self.adapters.get(product_input.store)
         if not adapter:
-            return StoreResult(ok=False, error="Loja ainda não configurada.")
+            return StoreResult(ok=False, error="Por enquanto só Mercado Livre está habilitado.")
         result = await adapter.get_offer(product_input)
         if result.card:
             await self.repo.save_offer(result.card)
@@ -37,16 +37,21 @@ class OfferService:
             return []
 
         selected_stores = set(stores or [])
+        enabled_stores = set(self.adapters.keys())
+        if selected_stores:
+            selected_stores &= enabled_stores
+            if not selected_stores:
+                return []
+        else:
+            selected_stores = enabled_stores
+
         if include_cache:
             cached = await self.repo.search_cached(cleaned, limit=limit)
-            if selected_stores:
-                cached = [card for card in cached if card.store in selected_stores]
+            cached = [card for card in cached if card.store in selected_stores]
             if cached:
                 return cached[:limit]
 
-        adapters = self.adapters.items()
-        if selected_stores:
-            adapters = [(store, adapter) for store, adapter in adapters if store in selected_stores]
+        adapters = [(store, adapter) for store, adapter in self.adapters.items() if store in selected_stores]
 
         async def guarded(adapter: BaseStoreAdapter) -> list[SearchResult]:
             try:
