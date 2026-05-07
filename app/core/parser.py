@@ -12,14 +12,14 @@ ASIN_RE = re.compile(r"\bB0[A-Z0-9]{8}\b|\b\d{9}[0-9X]\b", re.IGNORECASE)
 SHOPEE_DOT_RE = re.compile(r"(?:i\.)?(\d{5,})\.(\d{5,})")
 SHOPEE_PRODUCT_RE = re.compile(r"/product/(\d{5,})/(\d{5,})", re.IGNORECASE)
 ALIEXPRESS_ITEM_RE = re.compile(r"/(?:item/)?(\d{8,})\.html", re.IGNORECASE)
-SHEIN_ITEM_RE = re.compile(r"(?:-p-|goods_id=)(\d{5,})", re.IGNORECASE)
+SHEIN_ITEM_RE = re.compile(r"(?:-p-|goods_id=|productCode=)(\d{5,})", re.IGNORECASE)
 
 
 def detect_store_from_url(url: str) -> Store:
     host = (urlparse(url).netloc or "").lower()
-    if "mercadolivre" in host or "mercadolibre" in host or "meli" in host:
+    if "mercadolivre" in host or "mercadolibre" in host or "meli." in host:
         return Store.MERCADOLIVRE
-    if "shopee" in host or "shp.ee" in host:
+    if "shopee" in host or "shp.ee" in host or "shope.ee" in host:
         return Store.SHOPEE
     if "amazon" in host or host in {"a.co", "amzn.to"} or "amzn." in host:
         return Store.AMAZON
@@ -88,11 +88,21 @@ def strip_shared_app_text(text: str | None) -> str:
     without_urls = URL_RE.sub("", raw)
     patterns = [
         r"^Confira\s+",
+        r"^Olha\s+só\s+",
+        r"^Veja\s+",
         r"\s+com\s+\d+%\s+de\s+desconto!?$",
         r"\s+Somente\s+R\$\s*[\d\.,]+\.?$",
+        r"\s+Por\s+apenas\s+R\$\s*[\d\.,]+\.?$",
         r"\s+Encontre\s+na\s+Shopee\s+agora!?$",
+        r"\s+Compre\s+na\s+Shopee.*$",
         r"\s+Encontre\s+no\s+Mercado\s+Livre\s+agora!?$",
+        r"\s+Confira\s+no\s+Mercado\s+Livre.*$",
         r"\s+na\s+Amazon\s+agora!?$",
+        r"\s+Confira\s+na\s+Amazon.*$",
+        r"\s+Encontre\s+no\s+AliExpress.*$",
+        r"\s+Compre\s+no\s+AliExpress.*$",
+        r"\s+Encontre\s+na\s+SHEIN.*$",
+        r"\s+Compre\s+na\s+SHEIN.*$",
     ]
     cleaned = without_urls
     for pattern in patterns:
