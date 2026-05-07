@@ -5,6 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+SAFE_PRICE_SCHEMA_VERSION = 3
+
 
 class Store(StrEnum):
     SHOPEE = "shopee"
@@ -26,6 +28,7 @@ class ProductInput(BaseModel):
 
 
 class OfferCard(BaseModel):
+    schema_version: int = SAFE_PRICE_SCHEMA_VERSION
     store: Store
     product_id: Optional[str] = None
     title: str
@@ -40,6 +43,7 @@ class OfferCard(BaseModel):
     rating: Optional[str] = None
     shipping: Optional[str] = None
     source_quality: str = "fallback"
+    price_source: Optional[str] = None
     note: str = "Confira condições e disponibilidade abrindo a loja."
 
 
@@ -57,3 +61,4 @@ class SearchResult(BaseModel):
     installments: Optional[str] = None
     product_id: Optional[str] = None
     image_url: Optional[str] = None
+    price_source: Optional[str] = None
