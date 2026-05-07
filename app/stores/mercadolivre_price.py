@@ -58,15 +58,20 @@ def is_mercadolivre_url(url: str) -> bool:
 
 
 def normalize_ml_image_url(url: str | None) -> str | None:
+    """Return a high-quality image URL that Telegram can send as a photo.
+
+    InlineQueryResultPhoto is stricter than a normal web preview and commonly
+    fails with WebP. Prefer the Mercado Livre high-resolution JPEG form.
+    """
     if not url or not isinstance(url, str) or not url.startswith("http"):
         return None
-    value = url.replace("http://", "https://").strip()
+    value = url.replace("http://", "https://").strip().split("?", 1)[0]
     if "mlstatic.com" not in value:
         return value
-    value = value.split("?", 1)[0]
     value = re.sub(r"/D_[A-Z]{2}_NP_\dX_", "/D_NQ_NP_2X_", value)
     value = re.sub(r"/D_[A-Z]{2}_NP_", "/D_NQ_NP_2X_", value)
-    value = re.sub(r"-[A-Z](?:\.webp|\.jpg|\.jpeg|\.png)$", "-F.webp", value, flags=re.IGNORECASE)
+    value = re.sub(r"-[A-Z](?:\.webp|\.jpg|\.jpeg|\.png)$", "-F.jpg", value, flags=re.IGNORECASE)
+    value = re.sub(r"\.(webp|jpeg|png)$", ".jpg", value, flags=re.IGNORECASE)
     return value
 
 
@@ -113,7 +118,7 @@ def _find_title(content: str) -> str | None:
 
 
 def _find_image(content: str) -> str | None:
-    image = _find_meta(content, "og:image",) or _find_meta(content, "twitter:image")
+    image = _find_meta(content, "og:image") or _find_meta(content, "twitter:image")
     return normalize_ml_image_url(image)
 
 
