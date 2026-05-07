@@ -99,9 +99,9 @@ async def _publish_offer(
         try:
             await message.answer_photo(card.image_url, caption=html, parse_mode=ParseMode.HTML, reply_markup=markup)
         except Exception:
-            await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup, disable_web_page_preview=False)
+            await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup)
     else:
-        await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup, disable_web_page_preview=False)
+        await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup)
 
     await repo.log_usage(message.from_user.id if message.from_user else None, message.chat.id, "offer", card.store)
 
