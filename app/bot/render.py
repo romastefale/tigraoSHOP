@@ -32,8 +32,9 @@ def render_offer_html(card: OfferCard) -> str:
         lines.append(f"🚚 {escape(card.shipping)}")
     if card.rating:
         lines.append(f"⭐ {escape(card.rating)}")
-    lines.append("")
-    lines.append(escape(card.note))
+    if card.note:
+        lines.append("")
+        lines.append(escape(card.note))
     return "\n".join(lines)
 
 
