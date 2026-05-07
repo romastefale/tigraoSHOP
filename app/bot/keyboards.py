@@ -31,14 +31,14 @@ def offer_keyboard(card: OfferCard, offer_id: int | None = None) -> InlineKeyboa
     store_name = STORE_LABELS.get(card.store, card.store.value)
     button_url = mercadolivre_search_url(card.title) if card.store == Store.MERCADOLIVRE else card.offer_url
     rows: list[list[InlineKeyboardButton]] = [
-        [_button(store_name, url=button_url, style="primary")],
+        [_button(store_name, url=button_url, style="success")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def store_choice_keyboard(query: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[_button("Mercado Livre", callback_data="search_store:mercadolivre", style="primary")]]
+        inline_keyboard=[[_button("Mercado Livre", callback_data="search_store:mercadolivre", style="success")]]
     )
 
 
@@ -47,5 +47,5 @@ def search_result_keyboard(result: SearchResult | OfferCard) -> InlineKeyboardMa
     title = result.title
     url = mercadolivre_search_url(title) if result.store == Store.MERCADOLIVRE else (result.offer_url if isinstance(result, OfferCard) else result.url)
     return InlineKeyboardMarkup(
-        inline_keyboard=[[_button(store_name, url=url, style="primary")]]
+        inline_keyboard=[[_button(store_name, url=url, style="success")]]
     )
