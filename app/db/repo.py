@@ -36,7 +36,7 @@ class OfferRepository:
                     image_url TEXT,
                     photo_file_id TEXT,
                     original_url TEXT NOT NULL,
-                    affiliate_url TEXT NOT NULL,
+                    offer_url TEXT NOT NULL,
                     rating TEXT,
                     shipping TEXT,
                     source_quality TEXT NOT NULL,
@@ -47,6 +47,8 @@ class OfferRepository:
                 )
                 """
             )
+            await self._ensure_column(db, "offers", "offer_url", "TEXT")
+            await db.execute("UPDATE offers SET offer_url = original_url WHERE offer_url IS NULL OR offer_url = ''")
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS groups (
@@ -72,6 +74,14 @@ class OfferRepository:
             )
             await db.commit()
 
+    @staticmethod
+    async def _ensure_column(db: aiosqlite.Connection, table: str, column: str, column_type: str) -> None:
+        cursor = await db.execute(f"PRAGMA table_info({table})")
+        rows = await cursor.fetchall()
+        columns = {row[1] for row in rows}
+        if column not in columns:
+            await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+
     async def save_offer(self, card: OfferCard) -> int:
         payload = card.model_dump_json()
         product_key = card.product_id or card.original_url
@@ -80,7 +90,7 @@ class OfferRepository:
                 """
                 INSERT INTO offers
                     (store, product_id, title, price, old_price, image_url, photo_file_id,
-                     original_url, affiliate_url, rating, shipping, source_quality, payload)
+                     original_url, offer_url, rating, shipping, source_quality, payload)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(store, product_id) DO UPDATE SET
                     title=excluded.title,
@@ -89,7 +99,7 @@ class OfferRepository:
                     image_url=excluded.image_url,
                     photo_file_id=excluded.photo_file_id,
                     original_url=excluded.original_url,
-                    affiliate_url=excluded.affiliate_url,
+                    offer_url=excluded.offer_url,
                     rating=excluded.rating,
                     shipping=excluded.shipping,
                     source_quality=excluded.source_quality,
@@ -105,7 +115,7 @@ class OfferRepository:
                     card.image_url,
                     card.photo_file_id,
                     card.original_url,
-                    card.affiliate_url,
+                    card.offer_url,
                     card.rating,
                     card.shipping,
                     card.source_quality,
@@ -127,6 +137,8 @@ class OfferRepository:
         if not row:
             return None
         data: dict[str, Any] = json.loads(row[0])
+        if "offer_url" not in data and "affiliate_url" in data:
+            data["offer_url"] = data.pop("affiliate_url")
         return OfferCard.model_validate(data)
 
     async def search_cached(self, query: str, limit: int = 5) -> list[OfferCard]:
@@ -137,7 +149,13 @@ class OfferRepository:
                 (like, limit),
             )
             rows = await cursor.fetchall()
-        return [OfferCard.model_validate(json.loads(row[0])) for row in rows]
+        cards: list[OfferCard] = []
+        for row in rows:
+            data: dict[str, Any] = json.loads(row[0])
+            if "offer_url" not in data and "affiliate_url" in data:
+                data["offer_url"] = data.pop("affiliate_url")
+            cards.append(OfferCard.model_validate(data))
+        return cards
 
     async def log_usage(self, user_id: int | None, chat_id: int | None, action: str, store: Store | None = None) -> None:
         async with aiosqlite.connect(self.path) as db:
