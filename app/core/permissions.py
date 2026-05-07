@@ -6,6 +6,10 @@ from aiogram.types import Message
 from app.config import Settings
 
 
+def _status_value(status: object) -> str:
+    return str(getattr(status, "value", status))
+
+
 async def is_owner(user_id: int | None, settings: Settings) -> bool:
     return bool(user_id and settings.owner_id and user_id == settings.owner_id)
 
@@ -13,7 +17,7 @@ async def is_owner(user_id: int | None, settings: Settings) -> bool:
 async def can_delete_in_chat(bot: Bot, message: Message, settings: Settings) -> bool:
     if not message.chat or not message.from_user:
         return False
-    if message.chat.type == "private":
+    if _status_value(message.chat.type) == "private":
         return False
     try:
         member = await bot.get_chat_member(message.chat.id, bot.id)
@@ -31,4 +35,4 @@ async def can_remove_offer(bot: Bot, message: Message | None, user_id: int | Non
         member = await bot.get_chat_member(message.chat.id, user_id)
     except Exception:
         return False
-    return member.status in {"administrator", "creator"}
+    return _status_value(member.status) in {"administrator", "creator"}
