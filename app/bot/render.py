@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from html import escape
 
-from app.core.models import OfferCard, Store
+from app.core.models import OfferCard, SearchResult, Store
 from app.core.titles import main_product_name
 
 STORE_LABELS = {
@@ -44,3 +44,29 @@ def render_search_result(title: str, price: str | None, store: Store) -> str:
     else:
         parts.append("preço na loja")
     return " · ".join(parts)
+
+
+def render_search_result_html(result: SearchResult | OfferCard, position: int | None = None) -> str:
+    if isinstance(result, OfferCard):
+        title = main_product_name(result.title, max_chars=90)
+        url = result.offer_url
+        price = result.price
+        installments = result.installments
+        store = result.store
+    else:
+        title = main_product_name(result.title, max_chars=90)
+        url = result.url
+        price = result.price
+        installments = result.installments
+        store = result.store
+
+    prefix = f"{position}. " if position else ""
+    lines = [f'{prefix}<a href="{escape(url, quote=True)}">{escape(title)}</a>']
+    lines.append(f"Loja: <b>{escape(STORE_LABELS.get(store, store.value))}</b>")
+    if price:
+        lines.append(f"Preço: <b>{escape(price)}</b> à vista")
+    else:
+        lines.append("Preço: disponível abrindo a loja")
+    if installments:
+        lines.append(f"Parcelas: {escape(installments)}")
+    return "\n".join(lines)
