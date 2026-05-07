@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, Update
 from fastapi import FastAPI, HTTPException, Request
@@ -18,7 +19,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 settings: Settings = get_settings()
-bot = Bot(token=settings.bot_token, parse_mode=ParseMode.HTML) if settings.bot_token else None
+bot = (
+    Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    if settings.bot_token
+    else None
+)
 dp = Dispatcher()
 repo = OfferRepository(settings.database_url)
 affiliate = AffiliateService(settings)
