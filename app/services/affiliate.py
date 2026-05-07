@@ -24,12 +24,22 @@ class AffiliateService:
             return url
         if store == Store.AMAZON and self.settings.amazon_associate_tag:
             return _add_query(url, {"tag": self.settings.amazon_associate_tag})
-        if store == Store.MERCADOLIVRE and self.settings.mercadolivre_affiliate_tag:
-            return _add_query(url, {"matt_tool": self.settings.mercadolivre_affiliate_tag})
+        if store == Store.MERCADOLIVRE:
+            params = {
+                "matt_word": self.settings.mercadolivre_matt_word or self.settings.mercadolivre_affiliate_tag,
+                "matt_tool": self.settings.mercadolivre_matt_tool,
+            }
+            if any(params.values()):
+                return _add_query(url, params)
         if store == Store.ALIEXPRESS and self.settings.aliexpress_tracking_id:
             return _add_query(url, {"aff_fcid": self.settings.aliexpress_tracking_id})
-        if store == Store.SHOPEE and self.settings.shopee_tracking_id:
-            return _add_query(url, {"uls_trackid": self.settings.shopee_tracking_id})
+        if store == Store.SHOPEE:
+            params = {
+                "uls_trackid": self.settings.shopee_tracking_id,
+                "sub_id": self.settings.shopee_sub_id,
+            }
+            if any(params.values()):
+                return _add_query(url, params)
         if store == Store.SHEIN and self.settings.shein_affiliate_tag:
             return _add_query(url, {"ref": self.settings.shein_affiliate_tag})
         if self.settings.default_affiliate_tag:
