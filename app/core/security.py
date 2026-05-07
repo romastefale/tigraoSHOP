@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 _ALLOWED_SCHEMES = {"http", "https"}
 _ALLOWED_HOST_PARTS = {
     "shopee.",
+    "shp.ee",
     "mercadolivre.",
     "mercadolibre.",
     "amazon.",
