@@ -27,6 +27,7 @@ class MetadataStoreAdapter(BaseStoreAdapter):
             product_id=product_input.product_id,
             title=title,
             price=meta.price,
+            price_source=meta.price_source,
             image_url=meta.image_url,
             photo_file_id=product_input.photo_file_id,
             original_url=url,
@@ -46,6 +47,7 @@ class MetadataStoreAdapter(BaseStoreAdapter):
                 url=url,
                 store=self.store,
                 price=None,
+                price_source=None,
                 product_id=None,
                 image_url=None,
             )
