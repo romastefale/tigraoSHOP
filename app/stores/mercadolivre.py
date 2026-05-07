@@ -53,7 +53,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
             offer_url=permalink,
             source_quality="confirmed_api",
             price_source="items_api",
-            note="Preço confirmado automaticamente no Mercado Livre. Confira condições e disponibilidade abrindo a loja.",
+            note="",
         )
         return StoreResult(card=card)
 
@@ -80,7 +80,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
             offer_url=decision.final_url or product_input.url or "",
             source_quality=f"{decision.source or 'price_evidence'}:{decision.confidence}",
             price_source=decision.source,
-            note="Preço confirmado automaticamente no Mercado Livre. Confira condições e disponibilidade abrindo a loja.",
+            note="",
         )
         return StoreResult(card=card)
 
