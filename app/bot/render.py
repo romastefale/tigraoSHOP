@@ -16,7 +16,7 @@ STORE_LABELS = {
 
 def render_offer_html(card: OfferCard) -> str:
     title = escape(card.title[:180])
-    url = escape(card.affiliate_url, quote=True)
+    url = escape(card.offer_url, quote=True)
     lines = [f'🛍 <a href="{url}">{title}</a>', ""]
     if card.price:
         price_line = f"💰 <b>{escape(card.price)}</b>"
