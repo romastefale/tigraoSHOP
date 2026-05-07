@@ -10,6 +10,7 @@ from app.bot.render import render_offer_html
 from app.config import Settings
 from app.core.parser import parse_offer_input
 from app.core.permissions import can_delete_in_chat
+from app.core.resolver import resolve_url
 from app.db.repo import OfferRepository
 from app.services.offer_service import OfferService
 
@@ -47,6 +48,18 @@ def _reply_photo_file_id(message: Message) -> str | None:
     return None
 
 
+async def _resolve_product_input(payload: str, photo_file_id: str | None, force_search: bool, settings: Settings):
+    product_input = parse_offer_input(payload, photo_file_id=photo_file_id, force_search=force_search)
+    if product_input.url:
+        resolved_url = await resolve_url(product_input.url, settings.request_timeout_seconds)
+        if resolved_url and resolved_url != product_input.url:
+            resolved_input = parse_offer_input(resolved_url, photo_file_id=photo_file_id, force_search=force_search)
+            if resolved_input.product_id or resolved_input.store != product_input.store:
+                return resolved_input
+            product_input.url = resolved_url
+    return product_input
+
+
 async def _publish_offer(
     message: Message,
     bot: Bot,
@@ -57,7 +70,7 @@ async def _publish_offer(
     force_search: bool = False,
 ) -> None:
     photo_file_id = _reply_photo_file_id(message)
-    product_input = parse_offer_input(payload, photo_file_id=photo_file_id, force_search=force_search)
+    product_input = await _resolve_product_input(payload, photo_file_id, force_search, settings)
 
     if product_input.source in {"empty", "search"} and force_search:
         results = await service.search(product_input.query or payload, limit=5, timeout=settings.inline_timeout_seconds)
@@ -68,7 +81,7 @@ async def _publish_offer(
         if hasattr(first, "offer_url"):
             card = first
         else:
-            product_input = parse_offer_input(first.url)
+            product_input = await _resolve_product_input(first.url, photo_file_id, False, settings)
             result = await service.build_offer(product_input)
             if not result.card:
                 await message.reply("Encontrei resultado, mas não consegui montar o card.")
