@@ -29,19 +29,18 @@ def offer_keyboard(card: OfferCard, offer_id: int | None = None) -> InlineKeyboa
 
 
 def store_choice_keyboard(query: str) -> InlineKeyboardMarkup:
-    cleaned = main_product_name(query, max_chars=50)
     rows = [
         [
-            _button("Todas", callback_data=f"search_store:all:{cleaned}", style="primary"),
-            _button("Mercado Livre", callback_data=f"search_store:mercadolivre:{cleaned}", style="success"),
+            _button("Todas", callback_data="search_store:all", style="primary"),
+            _button("Mercado Livre", callback_data="search_store:mercadolivre", style="success"),
         ],
         [
-            _button("Amazon", callback_data=f"search_store:amazon:{cleaned}", style="primary"),
-            _button("Shopee", callback_data=f"search_store:shopee:{cleaned}", style="primary"),
+            _button("Amazon", callback_data="search_store:amazon", style="primary"),
+            _button("Shopee", callback_data="search_store:shopee", style="primary"),
         ],
         [
-            _button("AliExpress", callback_data=f"search_store:aliexpress:{cleaned}", style="primary"),
-            _button("SHEIN", callback_data=f"search_store:shein:{cleaned}", style="primary"),
+            _button("AliExpress", callback_data="search_store:aliexpress", style="primary"),
+            _button("SHEIN", callback_data="search_store:shein", style="primary"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
