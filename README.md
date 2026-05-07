@@ -2,7 +2,7 @@
 
 Bot Telegram agregador de ofertas para Shopee, Mercado Livre, Amazon, AliExpress e SHEIN.
 
-Base funcional criada com Python 3.12, aiogram 3.27, FastAPI webhook, SQLite assíncrono, modo inline rápido e arquitetura modular por loja.
+Base funcional criada com Python 3.12, aiogram 3.27, FastAPI webhook, SQLite assíncrono, modo inline rápido e arquitetura modular por loja. O foco é buscar, montar e enviar ofertas de forma limpa, sem camada de comissão ou afiliados.
 
 ## O que já faz
 
@@ -18,7 +18,7 @@ Base funcional criada com Python 3.12, aiogram 3.27, FastAPI webhook, SQLite ass
 - Tem modo inline com resposta curta e cache.
 - Usa Mercado Livre por API pública quando possível.
 - Usa Shopee, Amazon, AliExpress e SHEIN por link/metadados nesta primeira base.
-- Mantém adaptadores prontos para APIs/afiliados oficiais quando as credenciais forem liberadas.
+- Envia sempre o link original/resolvido da loja, sem parâmetros de afiliado.
 
 ## Comandos
 
@@ -79,14 +79,7 @@ ADMIN_LOG_CHAT_ID=
 WEBHOOK_BASE_URL=
 WEBHOOK_SECRET=replace-this-secret
 
-DATABASE_URL=./data/offers.db
-
-DEFAULT_AFFILIATE_TAG=
-MERCADOLIVRE_AFFILIATE_TAG=
-ALIEXPRESS_TRACKING_ID=
-AMAZON_ASSOCIATE_TAG=
-SHOPEE_TRACKING_ID=
-SHEIN_AFFILIATE_TAG=
+DATABASE_URL=/app/data/offers.db
 
 REQUEST_TIMEOUT_SECONDS=4
 INLINE_TIMEOUT_SECONDS=1.2
@@ -112,13 +105,9 @@ Healthcheck:
 
 1. Crie o projeto no Railway a partir do GitHub.
 2. Configure as variáveis do `.env.example`.
-3. Use volume em `/app/data` se quiser manter o SQLite persistente.
+3. Use volume em `/app/data` para manter o SQLite persistente.
 4. Defina `WEBHOOK_BASE_URL` com a URL pública do Railway.
-5. O app sobe com:
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
+5. O Dockerfile usa automaticamente `${PORT:-8000}`.
 
 ## Testes
 
@@ -152,23 +141,26 @@ app/
   db/
     repo.py
   services/
-    affiliate.py
     offer_service.py
   stores/
+    aliexpress_store.py
+    amazon_store.py
     base.py
     generic.py
     mercadolivre.py
     registry.py
+    shein_store.py
+    shopee_store.py
 tests/
 ```
 
 ## Estado dos adaptadores
 
 - Mercado Livre: busca e item via API pública quando possível.
-- Amazon: link/ASIN e metadados; pronto para credencial de afiliado.
-- AliExpress: link/ID e metadados; pronto para tracking ID.
-- Shopee: link e metadados; pronto para tracking ID.
-- SHEIN: link e metadados; pronto para tag de afiliado.
+- Amazon: link/ASIN e metadados.
+- AliExpress: link/ID e metadados.
+- Shopee: link e metadados.
+- SHEIN: link e metadados.
 
 ## Observação técnica
 
