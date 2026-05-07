@@ -16,7 +16,12 @@ META_RE_TEMPLATE = r'<meta[^>]+(?:property|name)=["\']{name}["\'][^>]+content=["
 CANONICAL_RE = re.compile(r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)["\']|<link[^>]+href=["\']([^"\']+)["\'][^>]+rel=["\']canonical["\']', re.IGNORECASE | re.DOTALL)
 JSONLD_RE = re.compile(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.IGNORECASE | re.DOTALL)
 SCRIPT_ID_RE = re.compile(r'["\'](?:id|item_id|itemId)["\']\s*:\s*["\']?(MLB-?\d{6,})["\']?', re.IGNORECASE)
-SCRIPT_PRICE_RE = re.compile(r'["\'](?:price|sale_price|current_price|amount)["\']\s*:\s*(?:["\']?)(\d+(?:\.\d{1,2})?)(?:["\']?)', re.IGNORECASE)
+SCRIPT_PRICE_RE = re.compile(r'["\'](?:price|sale_price|current_price|amount|priceAmount)["\']\s*:\s*(?:["\']?)(\d+(?:\.\d{1,2})?)(?:["\']?)', re.IGNORECASE)
+VISIBLE_ML_PRICE_RE = re.compile(
+    r'andes-money-amount__fraction[^>]*>\s*([0-9\.]+)\s*</[^>]+>(?:\s*<[^>]*andes-money-amount__cents[^>]*>\s*([0-9]{2})\s*</[^>]+>)?',
+    re.IGNORECASE | re.DOTALL,
+)
+BRL_TEXT_PRICE_RE = re.compile(r"R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]{1,7},[0-9]{2})")
 
 
 @dataclass(slots=True)
@@ -108,6 +113,9 @@ def _parse_price(value: object) -> float | None:
         number = float(value)
     else:
         text = str(value).strip().replace("R$", "").strip()
+        text = re.sub(r"[^0-9\.,]", "", text)
+        if not text:
+            return None
         try:
             number = float(text.replace(".", "").replace(",", ".") if "," in text else text)
         except ValueError:
@@ -151,7 +159,27 @@ def _jsonld_evidences(content: str, item_id: str | None) -> list[PriceEvidence]:
             price = _parse_price(node.get("price") or node.get("lowPrice") or node.get("highPrice"))
             currency = str(node.get("priceCurrency") or node.get("currency") or "BRL").upper()
             if price and currency in {"BRL", "R$"}:
-                evidences.append(PriceEvidence(price, "jsonld_offer", 95 if item_id else 85, item_id))
+                evidences.append(PriceEvidence(price, "jsonld_offer", 95 if item_id else 88, item_id))
+    return evidences
+
+
+def _visible_price_evidences(content: str, item_id: str | None) -> list[PriceEvidence]:
+    evidences: list[PriceEvidence] = []
+    for fraction, cents in VISIBLE_ML_PRICE_RE.findall(content[:900_000]):
+        raw = fraction.replace(".", "")
+        if cents:
+            raw += "." + cents
+        price = _parse_price(raw)
+        if price:
+            evidences.append(PriceEvidence(price, "visible_ml_price", 94 if item_id else 90, item_id))
+            break
+    if evidences:
+        return evidences
+    for raw in BRL_TEXT_PRICE_RE.findall(html.unescape(content[:250_000])):
+        price = _parse_price(raw)
+        if price:
+            evidences.append(PriceEvidence(price, "visible_brl_text", 86 if item_id else 80, item_id))
+            break
     return evidences
 
 
@@ -160,13 +188,14 @@ def collect_price_evidences(content: str, item_id: str | None) -> list[PriceEvid
     for meta_name in ("product:price:amount", "og:price:amount"):
         price = _parse_price(_find_meta(content, meta_name))
         if price:
-            evidences.append(PriceEvidence(price, meta_name, 96 if item_id else 86, item_id))
+            evidences.append(PriceEvidence(price, meta_name, 96 if item_id else 90, item_id))
     evidences.extend(_jsonld_evidences(content, item_id))
-    if item_id and not evidences:
-        for raw in SCRIPT_PRICE_RE.findall(content[:700_000]):
+    evidences.extend(_visible_price_evidences(content, item_id))
+    if not evidences:
+        for raw in SCRIPT_PRICE_RE.findall(content[:900_000]):
             price = _parse_price(raw)
             if price:
-                evidences.append(PriceEvidence(price, "script_price", 78, item_id))
+                evidences.append(PriceEvidence(price, "script_price", 84 if item_id else 78, item_id))
                 break
     return evidences
 
@@ -200,6 +229,7 @@ async def analyze_mercadolivre_url(url: str, timeout: float = 4.0) -> PriceDecis
             timeout=timeout,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36 tigraoSHOP",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
             },
         ) as client:
@@ -212,7 +242,7 @@ async def analyze_mercadolivre_url(url: str, timeout: float = 4.0) -> PriceDecis
     canonical = _find_canonical(content)
     og_url = _find_meta(content, "og:url")
     script_id = None
-    script_match = SCRIPT_ID_RE.search(content[:700_000])
+    script_match = SCRIPT_ID_RE.search(content[:900_000])
     if script_match:
         script_id = script_match.group(1)
     item_id = extract_item_id(normalized, final_url, canonical, og_url, script_id)
@@ -225,7 +255,7 @@ async def analyze_mercadolivre_url(url: str, timeout: float = 4.0) -> PriceDecis
         return PriceDecision(ok=False, title=title, image_url=image, final_url=final_url, item_id=item_id, reason="no_price_evidence", evidences=evidences)
     if best.confidence < 85:
         return PriceDecision(ok=False, title=title, image_url=image, final_url=final_url, item_id=item_id, reason="low_confidence_price", evidences=evidences)
-    if _has_variation_warning(content) and best.confidence < 95:
+    if _has_variation_warning(content) and best.confidence < 90:
         return PriceDecision(ok=False, title=title, image_url=image, final_url=final_url, item_id=item_id, reason="possible_required_variation", evidences=evidences)
 
     return PriceDecision(
