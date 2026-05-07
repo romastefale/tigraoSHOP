@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from urllib.parse import quote_plus
-
 import httpx
 
 from app.config import Settings
@@ -18,109 +16,106 @@ class MercadoLivreAdapter(BaseStoreAdapter):
 
     async def get_offer(self, product_input: ProductInput) -> StoreResult:
         if product_input.product_id:
-            api_url = f"https://api.mercadolibre.com/items/{product_input.product_id}"
             try:
                 async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
-                    response = await client.get(api_url)
-                    if response.status_code == 200:
-                        data = response.json()
-                        permalink = data.get("permalink") or product_input.url or ""
-                        listing_data = await self._find_listing_data(client, data.get("id") or product_input.product_id, data.get("title"))
-                        card = OfferCard(
-                            store=Store.MERCADOLIVRE,
-                            product_id=data.get("id") or product_input.product_id,
-                            title=data.get("title") or "Produto Mercado Livre",
-                            price=self._format_price((listing_data or {}).get("price") or data.get("price")),
-                            old_price=self._format_price((listing_data or {}).get("original_price") or data.get("original_price")),
-                            installments=self._format_installments((listing_data or {}).get("installments")),
-                            image_url=self._best_image(data, listing_data),
-                            photo_file_id=product_input.photo_file_id,
-                            original_url=permalink,
-                            offer_url=permalink,
-                            source_quality="api",
-                            price_source="mercadolivre_api",
-                        )
-                        return StoreResult(card=card)
+                    response = await client.get(f"https://api.mercadolibre.com/items/{product_input.product_id}")
+                    if response.status_code != 200:
+                        return StoreResult(ok=False, error="Não consegui consultar esse item no Mercado Livre.")
+                    data = response.json()
+                    listing = await self._find_listing_data(client, data.get("id") or product_input.product_id, data.get("title"))
+                    return self._build_confirmed_card(product_input, data, listing)
             except Exception as exc:
-                return StoreResult(ok=False, error=str(exc))
+                return StoreResult(ok=False, error=f"Falha ao consultar o Mercado Livre: {exc}")
 
         if product_input.url:
             meta = await fetch_metadata(product_input.url, self.settings.request_timeout_seconds)
-            listing_data: dict[str, object] = {}
-            if meta.title:
-                try:
-                    async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
-                        listing_data = await self._find_listing_data(client, None, meta.title)
-                except Exception:
-                    listing_data = {}
-            offer_url = str(listing_data.get("permalink") or product_input.url)
-            trusted_listing_price = bool(listing_data.get("price"))
+            if not meta.title:
+                return StoreResult(ok=False, error="Não consegui ler o produto do Mercado Livre com segurança.")
+            try:
+                async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
+                    listing = await self._find_listing_data(client, None, meta.title)
+            except Exception:
+                listing = {}
+            confirmed_price = self._format_price(listing.get("price"))
+            if not listing or not confirmed_price:
+                return StoreResult(ok=False, error="Preço não confirmado com segurança no Mercado Livre.")
+            if meta.price and meta.price != confirmed_price:
+                return StoreResult(ok=False, error="Preço divergente entre página e consulta. Card bloqueado.")
             card = OfferCard(
                 store=Store.MERCADOLIVRE,
-                product_id=product_input.product_id or self._string_or_none(listing_data.get("id")),
-                title=self._string_or_none(listing_data.get("title")) or meta.title or "Oferta Mercado Livre",
-                price=self._format_price(listing_data.get("price")) if trusted_listing_price else meta.price,
-                old_price=self._format_price(listing_data.get("original_price")) if trusted_listing_price else None,
-                installments=self._format_installments(listing_data.get("installments")) if trusted_listing_price else None,
-                image_url=self._best_image({}, listing_data) or meta.image_url,
+                product_id=self._string_or_none(listing.get("id")),
+                title=self._string_or_none(listing.get("title")) or meta.title,
+                price=confirmed_price,
+                old_price=self._format_price(listing.get("original_price")),
+                installments=self._format_installments(listing.get("installments")),
+                image_url=self._best_image({}, listing) or meta.image_url,
                 photo_file_id=product_input.photo_file_id,
                 original_url=product_input.url,
-                offer_url=offer_url,
-                source_quality="api" if listing_data else "metadata",
-                price_source="mercadolivre_search_api" if trusted_listing_price else meta.price_source,
+                offer_url=str(listing.get("permalink") or product_input.url),
+                source_quality="confirmed_api",
+                price_source="mercadolivre_search_api_confirmed",
+                note="Preço confirmado automaticamente no Mercado Livre. Confira condições e disponibilidade abrindo a loja.",
             )
             return StoreResult(card=card)
 
         return StoreResult(ok=False, error="Produto Mercado Livre sem link ou ID.")
 
+    def _build_confirmed_card(self, product_input: ProductInput, data: dict[str, object], listing: dict[str, object]) -> StoreResult:
+        item_price = self._format_price(data.get("price"))
+        listing_price = self._format_price(listing.get("price"))
+        if item_price and listing_price and item_price != listing_price:
+            return StoreResult(ok=False, error="Preço divergente entre item e listagem. Card bloqueado.")
+        confirmed_price = listing_price or item_price
+        if not confirmed_price:
+            return StoreResult(ok=False, error="Preço não confirmado com segurança no Mercado Livre.")
+        permalink = str(data.get("permalink") or listing.get("permalink") or product_input.url or "")
+        if not permalink:
+            return StoreResult(ok=False, error="Link do produto não confirmado no Mercado Livre.")
+        card = OfferCard(
+            store=Store.MERCADOLIVRE,
+            product_id=self._string_or_none(data.get("id")) or product_input.product_id,
+            title=self._string_or_none(data.get("title")) or self._string_or_none(listing.get("title")) or "Produto Mercado Livre",
+            price=confirmed_price,
+            old_price=self._format_price(listing.get("original_price") or data.get("original_price")),
+            installments=self._format_installments(listing.get("installments")),
+            image_url=self._best_image(data, listing),
+            photo_file_id=product_input.photo_file_id,
+            original_url=product_input.url or permalink,
+            offer_url=permalink,
+            source_quality="confirmed_api",
+            price_source="mercadolivre_item_api_confirmed",
+            note="Preço confirmado automaticamente no Mercado Livre. Confira condições e disponibilidade abrindo a loja.",
+        )
+        return StoreResult(card=card)
+
     async def search(self, query: str, limit: int = 5) -> list[SearchResult]:
         try:
             async with httpx.AsyncClient(timeout=self.settings.inline_timeout_seconds) as client:
-                response = await client.get(
-                    "https://api.mercadolibre.com/sites/MLB/search",
-                    params={"q": query, "limit": limit},
-                )
+                response = await client.get("https://api.mercadolibre.com/sites/MLB/search", params={"q": query, "limit": limit})
                 response.raise_for_status()
                 data = response.json()
         except Exception:
-            return [self._fallback_search_result(query)]
-
+            return []
         results: list[SearchResult] = []
         for item in data.get("results", [])[:limit]:
             url = item.get("permalink") or ""
             price = self._format_price(item.get("price"))
-            if not url:
+            if not url or not price:
                 continue
-            results.append(
-                SearchResult(
-                    title=item.get("title") or "Produto Mercado Livre",
-                    url=url,
-                    store=Store.MERCADOLIVRE,
-                    price=price,
-                    installments=self._format_installments(item.get("installments")) if price else None,
-                    product_id=item.get("id"),
-                    image_url=self._best_image({}, item),
-                    price_source="mercadolivre_search_api" if price else None,
-                )
-            )
-        return results or [self._fallback_search_result(query)]
+            results.append(SearchResult(title=item.get("title") or "Produto Mercado Livre", url=url, store=Store.MERCADOLIVRE, price=price, installments=self._format_installments(item.get("installments")), product_id=item.get("id"), image_url=self._best_image({}, item), price_source="mercadolivre_search_api_confirmed"))
+        return results
 
     async def _find_listing_data(self, client: httpx.AsyncClient, item_id: str | None, title: str | None) -> dict[str, object]:
         if not item_id and not title:
             return {}
-        queries = [item_id, title]
-        for query in [q for q in queries if q]:
+        for query in [value for value in (item_id, title) if value]:
             try:
-                response = await client.get(
-                    "https://api.mercadolibre.com/sites/MLB/search",
-                    params={"q": query, "limit": 20},
-                )
+                response = await client.get("https://api.mercadolibre.com/sites/MLB/search", params={"q": query, "limit": 20})
                 if response.status_code != 200:
                     continue
-                data = response.json()
+                results = response.json().get("results") or []
             except Exception:
                 continue
-            results = data.get("results") or []
             if item_id:
                 for item in results:
                     if item.get("id") == item_id:
@@ -128,19 +123,6 @@ class MercadoLivreAdapter(BaseStoreAdapter):
             if results:
                 return results[0]
         return {}
-
-    def _fallback_search_result(self, query: str) -> SearchResult:
-        encoded = quote_plus(query.strip())
-        url = f"https://lista.mercadolivre.com.br/{encoded}" if encoded else "https://www.mercadolivre.com.br/"
-        return SearchResult(
-            title=query.strip() or "Buscar no Mercado Livre",
-            url=url,
-            store=Store.MERCADOLIVRE,
-            price=None,
-            product_id=None,
-            image_url=None,
-            price_source=None,
-        )
 
     @staticmethod
     def _best_image(item_data: dict[str, object], listing_data: dict[str, object] | None = None) -> str | None:
@@ -186,6 +168,5 @@ class MercadoLivreAdapter(BaseStoreAdapter):
         amount = cls._format_price(installments.get("amount"))
         if not quantity or not amount:
             return None
-        rate = installments.get("rate")
-        suffix = " sem juros" if rate in (0, 0.0, "0", "0.0") else ""
+        suffix = " sem juros" if installments.get("rate") in (0, 0.0, "0", "0.0") else ""
         return f"{quantity}x de {amount}{suffix}"
