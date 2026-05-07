@@ -8,6 +8,7 @@ from aiogram.types import Message
 from app.bot.keyboards import offer_keyboard
 from app.bot.render import render_offer_html
 from app.config import Settings
+from app.core.models import ProductInput, SearchResult
 from app.core.parser import parse_offer_input
 from app.core.permissions import can_delete_in_chat
 from app.core.resolver import resolve_url
@@ -60,6 +61,18 @@ async def _resolve_product_input(payload: str, photo_file_id: str | None, force_
     return product_input
 
 
+def _input_from_search_result(result: SearchResult, photo_file_id: str | None) -> ProductInput:
+    return ProductInput(
+        source="search_result",
+        store=result.store,
+        raw_text=result.title,
+        url=result.url,
+        product_id=result.product_id,
+        query=result.title,
+        photo_file_id=photo_file_id,
+    )
+
+
 async def _publish_offer(
     message: Message,
     bot: Bot,
@@ -81,7 +94,7 @@ async def _publish_offer(
         if hasattr(first, "offer_url"):
             card = first
         else:
-            product_input = await _resolve_product_input(first.url, photo_file_id, False, settings)
+            product_input = _input_from_search_result(first, photo_file_id)
             result = await service.build_offer(product_input)
             if not result.card:
                 await message.reply("Encontrei resultado, mas não consegui montar o card.")
