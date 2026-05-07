@@ -30,7 +30,9 @@ def _button_url(url: str, label: str) -> InlineKeyboardMarkup:
 def _article_from_card(card: OfferCard) -> InlineQueryResultArticle:
     text = render_offer_html(card)
     store_name = STORE_LABELS.get(card.store, card.store.value)
-    description = f"{card.price or 'Preço no link'} · {store_name}"
+    description = card.price or "Preço no link"
+    if card.installments:
+        description += f" · {card.installments}"
     return InlineQueryResultArticle(
         id=_stable_id(card.offer_url + card.title),
         title=card.title[:64],
@@ -48,10 +50,14 @@ def _article_from_search(result: SearchResult) -> InlineQueryResultArticle:
     title = result.title[:64]
     store_name = STORE_LABELS.get(result.store, result.store.value)
     summary = render_search_result(result.title, result.price, result.store)
+    if result.installments:
+        summary += f" · {result.installments}"
     text = f'🛍 <a href="{escape(result.url, quote=True)}">{escape(result.title[:180])}</a>\n\n'
     if result.price:
         text += f"💰 <b>{escape(result.price)}</b>\n"
-    text += f"🏬 {store_name}\n\nOferta encontrada em busca rápida."
+    if result.installments:
+        text += f"💳 {escape(result.installments)}\n"
+    text += "\nOferta encontrada em busca rápida."
     return InlineQueryResultArticle(
         id=_stable_id(result.url + result.title),
         title=title,
