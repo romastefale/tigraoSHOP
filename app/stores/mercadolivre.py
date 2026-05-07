@@ -148,5 +148,5 @@ class MercadoLivreAdapter(BaseStoreAdapter):
         if not quantity or not amount:
             return None
         rate = installments.get("rate")
-        suffix = " sem juros" if rate in (0, 0.0, "0", "0.0", None) else ""
+        suffix = " sem juros" if rate in (0, 0.0, "0", "0.0") else ""
         return f"{quantity}x de {amount}{suffix}"
