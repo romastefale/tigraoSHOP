@@ -9,7 +9,7 @@ from app.bot.keyboards import offer_keyboard
 from app.bot.render import render_offer_html
 from app.config import Settings
 from app.core.parser import parse_offer_input
-from app.core.permissions import can_delete_in_chat, can_remove_offer
+from app.core.permissions import can_delete_in_chat
 from app.db.repo import OfferRepository
 from app.services.offer_service import OfferService
 
@@ -65,7 +65,7 @@ async def _publish_offer(
             await message.reply("Não encontrei oferta para essa busca.")
             return
         first = results[0]
-        if hasattr(first, "affiliate_url"):
+        if hasattr(first, "offer_url"):
             card = first
         else:
             product_input = parse_offer_input(first.url)
@@ -82,9 +82,8 @@ async def _publish_offer(
             return
         card = result.card
 
-    offer_id = await repo.save_offer(card)
-    user_can_remove = await can_remove_offer(bot, message, message.from_user.id if message.from_user else None, settings)
-    markup = offer_keyboard(card, offer_id=offer_id, can_remove=user_can_remove)
+    await repo.save_offer(card)
+    markup = offer_keyboard(card)
     html = render_offer_html(card)
 
     if await can_delete_in_chat(bot, message, settings):
