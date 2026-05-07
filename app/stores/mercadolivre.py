@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote_plus
+
 import httpx
 
 from app.config import Settings
@@ -31,7 +33,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                             price=self._format_price((listing_data or {}).get("price") or data.get("price")),
                             old_price=self._format_price((listing_data or {}).get("original_price") or data.get("original_price")),
                             installments=self._format_installments((listing_data or {}).get("installments")),
-                            image_url=data.get("thumbnail"),
+                            image_url=self._best_image(data, listing_data),
                             photo_file_id=product_input.photo_file_id,
                             original_url=permalink,
                             offer_url=permalink,
@@ -58,7 +60,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                 price=self._format_price(listing_data.get("price") or meta.price),
                 old_price=self._format_price(listing_data.get("original_price")),
                 installments=self._format_installments(listing_data.get("installments")),
-                image_url=self._string_or_none(listing_data.get("thumbnail")) or meta.image_url,
+                image_url=self._best_image({}, listing_data) or meta.image_url,
                 photo_file_id=product_input.photo_file_id,
                 original_url=product_input.url,
                 offer_url=offer_url,
@@ -78,7 +80,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                 response.raise_for_status()
                 data = response.json()
         except Exception:
-            return []
+            return [self._fallback_search_result(query)]
 
         results: list[SearchResult] = []
         for item in data.get("results", [])[:limit]:
@@ -93,10 +95,10 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                     price=self._format_price(item.get("price")),
                     installments=self._format_installments(item.get("installments")),
                     product_id=item.get("id"),
-                    image_url=item.get("thumbnail"),
+                    image_url=self._best_image({}, item),
                 )
             )
-        return results
+        return results or [self._fallback_search_result(query)]
 
     async def _find_listing_data(self, client: httpx.AsyncClient, item_id: str | None, title: str | None) -> dict[str, object]:
         if not item_id and not title:
@@ -122,6 +124,35 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                 return results[0]
         return {}
 
+    def _fallback_search_result(self, query: str) -> SearchResult:
+        encoded = quote_plus(query.strip())
+        url = f"https://lista.mercadolivre.com.br/{encoded}" if encoded else "https://www.mercadolivre.com.br/"
+        return SearchResult(
+            title=query.strip() or "Buscar no Mercado Livre",
+            url=url,
+            store=Store.MERCADOLIVRE,
+            price=None,
+            product_id=None,
+            image_url=None,
+        )
+
+    @staticmethod
+    def _best_image(item_data: dict[str, object], listing_data: dict[str, object] | None = None) -> str | None:
+        listing_data = listing_data or {}
+        for source in (listing_data, item_data):
+            pictures = source.get("pictures")
+            if isinstance(pictures, list):
+                for picture in pictures:
+                    if isinstance(picture, dict):
+                        url = picture.get("secure_url") or picture.get("url")
+                        if isinstance(url, str) and url.startswith("http"):
+                            return url
+            for key in ("secure_thumbnail", "thumbnail"):
+                url = source.get(key)
+                if isinstance(url, str) and url.startswith("http"):
+                    return url.replace("http://", "https://")
+        return None
+
     @staticmethod
     def _string_or_none(value: object) -> str | None:
         if value in (None, ""):
@@ -135,7 +166,9 @@ class MercadoLivreAdapter(BaseStoreAdapter):
         try:
             number = float(value)
         except (TypeError, ValueError):
-            return str(value)
+            return None
+        if number <= 0:
+            return None
         formatted = f"R$ {number:,.2f}"
         return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
 
