@@ -29,13 +29,17 @@ Por enquanto estou funcionando apenas com <b>Mercado Livre</b>.
 Cole um link do Mercado Livre no privado ou use no grupo:
 <code>/of link-do-mercado-livre</code>
 
-Também aceito ID de anúncio:
+Também aceito ID de anúncio e códigos de compartilhamento:
 <code>/of MLB1234567890</code>
+<code>/of HV0JHT-NJ03</code>
+<code>/of https://meli.la/1qjkdLZ</code>
 
 <b>Pesquisar ofertas</b>
 No privado ou no grupo:
 <code>/s fone bluetooth</code>
 <code>/s mercado livre fone bluetooth</code>
+
+Se você usar <code>/s</code> com link, ID ou código do Mercado Livre, eu trato como oferta direta, não como busca.
 
 Só mostro resultados com preço confirmado. Se o preço não for confirmado com segurança, eu não publico o card.
 
@@ -58,7 +62,7 @@ Hoje estou tímido: só Mercado Livre, com foco em preço confirmado.
 Você pode começar de três formas:
 
 1. Cole um link do Mercado Livre aqui no privado.
-2. Use <code>/of link-do-mercado-livre</code>.
+2. Use <code>/of link</code>, <code>/of MLB123...</code> ou <code>/of HV0JHT-NJ03</code>.
 3. Pesquise com <code>/s nome do produto</code>.
 
 Se o preço não for confirmado com segurança, eu bloqueio a publicação."""
@@ -144,6 +148,11 @@ def _input_from_search_result(result: SearchResult, photo_file_id: str | None) -
     )
 
 
+def _looks_like_direct_offer(payload: str) -> bool:
+    product_input = parse_offer_input(payload, force_search=False)
+    return bool(product_input.url or product_input.product_id)
+
+
 async def _send_offer(message: Message, html: str, markup, card) -> None:
     if card.photo_file_id:
         await message.answer_photo(card.photo_file_id, caption=html, parse_mode=ParseMode.HTML, reply_markup=markup)
@@ -224,10 +233,14 @@ async def offer_cmd(message: Message, bot: Bot, offer_service: OfferService, off
 
 
 @router.message(Command("s"))
-async def search_cmd(message: Message, offer_service: OfferService, settings: Settings) -> None:
+async def search_cmd(message: Message, bot: Bot, offer_service: OfferService, offer_repo: OfferRepository, settings: Settings) -> None:
     payload = _command_payload(message)
     if not payload:
-        await message.reply("Use <code>/s nome do produto</code> ou <code>/s mercado livre produto</code>.", parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await message.reply("Use <code>/s nome do produto</code>, <code>/s link</code> ou <code>/s HV0JHT-NJ03</code>.", parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        return
+
+    if _looks_like_direct_offer(payload):
+        await _publish_offer(message, bot, offer_service, offer_repo, settings, payload, force_search=False)
         return
 
     query, store = parse_store_search(payload)
@@ -243,7 +256,7 @@ async def group_mention_text(message: Message, bot: Bot, offer_service: OfferSer
 
     payload = _strip_bot_mention(text, settings.bot_username)
     if not payload:
-        await message.reply("Envie um link ou produto do Mercado Livre junto com a menção.", link_preview_options=NO_PREVIEW)
+        await message.reply("Envie um link, ID ou código do Mercado Livre junto com a menção.", link_preview_options=NO_PREVIEW)
         return
 
     product_input = parse_offer_input(payload, force_search=False)
