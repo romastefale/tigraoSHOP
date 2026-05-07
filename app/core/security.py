@@ -15,12 +15,23 @@ _ALLOWED_HOST_PARTS = {
     # Amazon and Amazon app share links.
     "amazon.",
     "amzn.",
+    "amzn.to",
     "a.co",
     # AliExpress and known AliExpress link forms.
     "aliexpress.",
     "s.click.aliexpress.",
     "s.aliexpress.",
     "a.aliexpress.",
+    "a.aliexpress.com",
+    "aliexpi.com",
+    # Magalu and Magalu app/share links.
+    "magazineluiza.",
+    "magalu.",
+    "magazinevoce.",
+    "magazinevoce.com.br",
+    "magazine.luiza.",
+    "maga.lu",
+    "magalu.page.link",
     # SHEIN and SHEIN app share links.
     "shein.",
     "shein.com",
