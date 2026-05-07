@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import hashlib
-from html import escape
 
 from aiogram import Router
 from aiogram.enums import ParseMode
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 
-from app.bot.render import STORE_LABELS, render_offer_html, render_search_result
+from app.bot.keyboards import mercadolivre_search_url
+from app.bot.render import STORE_LABELS, render_offer_html
 from app.config import Settings
-from app.core.models import OfferCard, SearchResult, Store
+from app.core.models import OfferCard, Store
+from app.core.parser import parse_offer_input
 from app.core.titles import main_product_name
 from app.services.offer_service import OfferService
 
@@ -22,16 +23,16 @@ def _stable_id(value: str) -> str:
 
 def _button_url(url: str, label: str) -> InlineKeyboardMarkup:
     try:
-        button = InlineKeyboardButton(text=label, url=url, style="success")
+        button = InlineKeyboardButton(text=label, url=url, style="primary")
     except Exception:
         button = InlineKeyboardButton(text=label, url=url)
     return InlineKeyboardMarkup(inline_keyboard=[[button]])
 
 
-def _description(price: str | None, installments: str | None) -> str:
-    description = f"{price} à vista" if price else "Preço não confirmado"
-    if installments:
-        description += f" · {installments}"
+def _description(card: OfferCard) -> str:
+    description = f"{card.price} à vista" if card.price else "Oferta Mercado Livre"
+    if card.installments:
+        description += f" · {card.installments}"
     return description[:120]
 
 
@@ -40,39 +41,15 @@ def _article_from_card(card: OfferCard) -> InlineQueryResultArticle:
     store_name = STORE_LABELS.get(card.store, card.store.value)
     clean_title = main_product_name(card.title, max_chars=70)
     return InlineQueryResultArticle(
-        id=_stable_id(card.offer_url + card.title),
+        id=_stable_id((card.offer_url or "") + card.title),
         title=f"{store_name} · {clean_title}"[:64],
-        description=_description(card.price, card.installments),
+        description=_description(card),
         thumbnail_url=card.image_url,
         input_message_content=InputTextMessageContent(
             message_text=text,
             parse_mode=ParseMode.HTML,
         ),
-        reply_markup=_button_url(card.offer_url, store_name),
-    )
-
-
-def _article_from_search(result: SearchResult) -> InlineQueryResultArticle:
-    store_name = STORE_LABELS.get(result.store, result.store.value)
-    clean_title = main_product_name(result.title, max_chars=70)
-    summary = render_search_result(result.title, result.price, result.store)
-    if result.installments:
-        summary += f" · {result.installments}"
-    text = f'🛍 <a href="{escape(result.url, quote=True)}">{escape(clean_title)}</a>\n\n'
-    text += f"💰 <b>{escape(result.price or 'Preço confirmado indisponível')}</b> à vista\n"
-    if result.installments:
-        text += f"💳 {escape(result.installments)}\n"
-    text += "\nPreço confirmado automaticamente no Mercado Livre. Confira condições e disponibilidade abrindo a loja."
-    return InlineQueryResultArticle(
-        id=_stable_id(result.url + result.title),
-        title=f"{store_name} · {clean_title}"[:64],
-        description=summary[:120],
-        thumbnail_url=result.image_url,
-        input_message_content=InputTextMessageContent(
-            message_text=text,
-            parse_mode=ParseMode.HTML,
-        ),
-        reply_markup=_button_url(result.url, store_name),
+        reply_markup=_button_url(mercadolivre_search_url(card.title), store_name),
     )
 
 
@@ -83,17 +60,18 @@ async def inline_query_handler(query: InlineQuery, offer_service: OfferService, 
         await query.answer(results=[], cache_time=5, is_personal=True)
         return
 
-    raw_results = await offer_service.search(term, limit=8, timeout=settings.inline_timeout_seconds, stores=[Store.MERCADOLIVRE])
-    articles = []
-    for item in raw_results:
-        if isinstance(item, OfferCard):
-            if item.store == Store.MERCADOLIVRE and item.price:
-                articles.append(_article_from_card(item))
-        elif item.store == Store.MERCADOLIVRE and item.price:
-            articles.append(_article_from_search(item))
+    product_input = parse_offer_input(term, force_search=False)
+    if not product_input.url and not product_input.product_id:
+        await query.answer(results=[], cache_time=5, is_personal=True)
+        return
+
+    result = await offer_service.build_offer(product_input)
+    if not result.card or result.card.store != Store.MERCADOLIVRE or not result.card.price:
+        await query.answer(results=[], cache_time=5, is_personal=True)
+        return
 
     await query.answer(
-        results=articles[:8],
+        results=[_article_from_card(result.card)],
         cache_time=settings.inline_cache_time,
         is_personal=True,
     )
