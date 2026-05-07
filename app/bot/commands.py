@@ -3,19 +3,20 @@ from __future__ import annotations
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType, ParseMode
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import LinkPreviewOptions, Message
 
 from app.bot.keyboards import offer_keyboard
 from app.bot.render import render_offer_html
 from app.config import Settings
 from app.core.models import ProductInput, SearchResult
-from app.core.parser import parse_offer_input
+from app.core.parser import URL_RE, parse_offer_input
 from app.core.permissions import can_delete_in_chat
 from app.core.resolver import resolve_url
 from app.db.repo import OfferRepository
 from app.services.offer_service import OfferService
 
 router = Router(name="commands")
+NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 HELP_TEXT = """Envie link, ID ou pesquise uma oferta.
 
@@ -38,6 +39,25 @@ def _command_payload(message: Message) -> str:
     return parts[1].strip() if len(parts) > 1 else ""
 
 
+def _extract_message_url(message: Message | None) -> str | None:
+    if not message:
+        return None
+    text = message.text or message.caption or ""
+    entities = list(message.entities or []) + list(message.caption_entities or [])
+    for entity in entities:
+        url = getattr(entity, "url", None)
+        if url:
+            return url
+        try:
+            extracted = entity.extract_from(text)
+        except Exception:
+            extracted = None
+        if extracted and URL_RE.search(extracted):
+            return extracted
+    match = URL_RE.search(text)
+    return match.group(0) if match else None
+
+
 def _reply_photo_file_id(message: Message) -> str | None:
     if not message.reply_to_message:
         return None
@@ -47,6 +67,17 @@ def _reply_photo_file_id(message: Message) -> str | None:
     if reply.document and reply.document.mime_type and reply.document.mime_type.startswith("image/"):
         return reply.document.file_id
     return None
+
+
+def _effective_payload(message: Message, payload: str) -> str:
+    if payload:
+        return payload
+    reply_url = _extract_message_url(message.reply_to_message)
+    if reply_url:
+        return reply_url
+    if message.reply_to_message:
+        return message.reply_to_message.text or message.reply_to_message.caption or ""
+    return payload
 
 
 async def _resolve_product_input(payload: str, photo_file_id: str | None, force_search: bool, settings: Settings):
@@ -73,6 +104,18 @@ def _input_from_search_result(result: SearchResult, photo_file_id: str | None) -
     )
 
 
+async def _send_offer(message: Message, html: str, markup, card) -> None:
+    if card.photo_file_id:
+        await message.answer_photo(card.photo_file_id, caption=html, parse_mode=ParseMode.HTML, reply_markup=markup)
+    elif card.image_url:
+        try:
+            await message.answer_photo(card.image_url, caption=html, parse_mode=ParseMode.HTML, reply_markup=markup)
+        except Exception:
+            await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup, link_preview_options=NO_PREVIEW)
+    else:
+        await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup, link_preview_options=NO_PREVIEW)
+
+
 async def _publish_offer(
     message: Message,
     bot: Bot,
@@ -83,12 +126,16 @@ async def _publish_offer(
     force_search: bool = False,
 ) -> None:
     photo_file_id = _reply_photo_file_id(message)
+    payload = _effective_payload(message, payload)
     product_input = await _resolve_product_input(payload, photo_file_id, force_search, settings)
 
-    if product_input.source in {"empty", "search"} and force_search:
+    if product_input.source in {"empty", "search"}:
+        if not product_input.query and not payload:
+            await message.reply("Envie link, ID ou termo de busca.", link_preview_options=NO_PREVIEW)
+            return
         results = await service.search(product_input.query or payload, limit=5, timeout=settings.inline_timeout_seconds)
         if not results:
-            await message.reply("Não encontrei oferta para essa busca.")
+            await message.reply("Não encontrei oferta para essa busca.", link_preview_options=NO_PREVIEW)
             return
         first = results[0]
         if hasattr(first, "offer_url"):
@@ -97,14 +144,13 @@ async def _publish_offer(
             product_input = _input_from_search_result(first, photo_file_id)
             result = await service.build_offer(product_input)
             if not result.card:
-                await message.reply("Encontrei resultado, mas não consegui montar o card.")
+                await message.reply("Encontrei resultado, mas não consegui montar o card.", link_preview_options=NO_PREVIEW)
                 return
             card = result.card
     else:
         result = await service.build_offer(product_input)
         if not result.card:
-            target = message.reply if message.chat.type == ChatType.PRIVATE else message.answer
-            await target(result.error or "Não consegui montar essa oferta.")
+            await message.answer(result.error or "Não consegui montar essa oferta.", link_preview_options=NO_PREVIEW)
             return
         card = result.card
 
@@ -118,27 +164,18 @@ async def _publish_offer(
         except Exception:
             pass
 
-    if card.photo_file_id:
-        await message.answer_photo(card.photo_file_id, caption=html, parse_mode=ParseMode.HTML, reply_markup=markup)
-    elif card.image_url:
-        try:
-            await message.answer_photo(card.image_url, caption=html, parse_mode=ParseMode.HTML, reply_markup=markup)
-        except Exception:
-            await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup)
-    else:
-        await message.answer(html, parse_mode=ParseMode.HTML, reply_markup=markup)
-
+    await _send_offer(message, html, markup, card)
     await repo.log_usage(message.from_user.id if message.from_user else None, message.chat.id, "offer", card.store)
 
 
 @router.message(CommandStart())
 async def start(message: Message) -> None:
-    await message.answer("tigraoSHOP pronto.\n\n" + HELP_TEXT)
+    await message.answer("tigraoSHOP pronto.\n\n" + HELP_TEXT, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("help"))
 async def help_cmd(message: Message) -> None:
-    await message.answer(HELP_TEXT)
+    await message.answer(HELP_TEXT, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("of"))
@@ -150,7 +187,7 @@ async def offer_cmd(message: Message, bot: Bot, offer_service: OfferService, off
 async def search_cmd(message: Message, bot: Bot, offer_service: OfferService, offer_repo: OfferRepository, settings: Settings) -> None:
     payload = _command_payload(message)
     if not payload:
-        await message.reply("Use /s termo de busca.")
+        await message.reply("Use /s termo de busca.", link_preview_options=NO_PREVIEW)
         return
     await _publish_offer(message, bot, offer_service, offer_repo, settings, payload, force_search=True)
 
@@ -160,4 +197,4 @@ async def private_plain_text(message: Message, bot: Bot, offer_service: OfferSer
     text = message.text or ""
     if text.startswith("/"):
         return
-    await _publish_offer(message, bot, offer_service, offer_repo, settings, text)
+    await _publish_offer(message, bot, offer_service, offer_repo, settings, text, force_search=True)
