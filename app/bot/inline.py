@@ -23,7 +23,7 @@ def _stable_id(value: str) -> str:
 
 def _button_url(url: str, label: str) -> InlineKeyboardMarkup:
     try:
-        button = InlineKeyboardButton(text=label, url=url, style="primary")
+        button = InlineKeyboardButton(text=label, url=url, style="success")
     except Exception:
         button = InlineKeyboardButton(text=label, url=url)
     return InlineKeyboardMarkup(inline_keyboard=[[button]])
