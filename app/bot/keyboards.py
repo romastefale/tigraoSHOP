@@ -23,9 +23,9 @@ def _button(text: str, *, style: str | None = None, copy_text: str | None = None
 
 def offer_keyboard(card: OfferCard, offer_id: int | None = None, can_remove: bool = False) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
-        [_button("🟢 Ver oferta", url=card.affiliate_url, style="success")],
+        [_button("🟢 Ver oferta", url=card.offer_url, style="success")],
         [
-            _button("🔵 Copiar link", copy_text=card.affiliate_url, style="primary"),
+            _button("🔵 Copiar link", copy_text=card.offer_url, style="primary"),
             _button("🔵 Similares", switch_inline_query_current_chat=card.title[:50], style="primary"),
         ],
     ]
