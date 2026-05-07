@@ -33,6 +33,7 @@ class OfferRepository:
                     title TEXT NOT NULL,
                     price TEXT,
                     old_price TEXT,
+                    installments TEXT,
                     image_url TEXT,
                     photo_file_id TEXT,
                     original_url TEXT NOT NULL,
@@ -48,6 +49,7 @@ class OfferRepository:
                 """
             )
             await self._ensure_column(db, "offers", "offer_url", "TEXT")
+            await self._ensure_column(db, "offers", "installments", "TEXT")
             await db.execute("UPDATE offers SET offer_url = original_url WHERE offer_url IS NULL OR offer_url = ''")
             await db.execute(
                 """
@@ -89,13 +91,14 @@ class OfferRepository:
             await db.execute(
                 """
                 INSERT INTO offers
-                    (store, product_id, title, price, old_price, image_url, photo_file_id,
+                    (store, product_id, title, price, old_price, installments, image_url, photo_file_id,
                      original_url, offer_url, rating, shipping, source_quality, payload)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(store, product_id) DO UPDATE SET
                     title=excluded.title,
                     price=excluded.price,
                     old_price=excluded.old_price,
+                    installments=excluded.installments,
                     image_url=excluded.image_url,
                     photo_file_id=excluded.photo_file_id,
                     original_url=excluded.original_url,
@@ -112,6 +115,7 @@ class OfferRepository:
                     card.title,
                     card.price,
                     card.old_price,
+                    card.installments,
                     card.image_url,
                     card.photo_file_id,
                     card.original_url,
