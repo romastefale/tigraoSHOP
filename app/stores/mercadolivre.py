@@ -23,12 +23,14 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                     if response.status_code == 200:
                         data = response.json()
                         permalink = data.get("permalink") or product_input.url or ""
+                        listing_data = await self._find_listing_data(client, data.get("id") or product_input.product_id, data.get("title"))
                         card = OfferCard(
                             store=Store.MERCADOLIVRE,
                             product_id=data.get("id") or product_input.product_id,
                             title=data.get("title") or "Produto Mercado Livre",
-                            price=self._format_price(data.get("price")),
+                            price=self._format_price(listing_data.get("price") if listing_data else data.get("price")),
                             old_price=self._format_price(data.get("original_price")),
+                            installments=self._format_installments((listing_data or {}).get("installments")),
                             image_url=data.get("thumbnail"),
                             photo_file_id=product_input.photo_file_id,
                             original_url=permalink,
@@ -79,11 +81,36 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                     url=url,
                     store=Store.MERCADOLIVRE,
                     price=self._format_price(item.get("price")),
+                    installments=self._format_installments(item.get("installments")),
                     product_id=item.get("id"),
                     image_url=item.get("thumbnail"),
                 )
             )
         return results
+
+    async def _find_listing_data(self, client: httpx.AsyncClient, item_id: str | None, title: str | None) -> dict[str, object]:
+        if not item_id and not title:
+            return {}
+        queries = [item_id, title]
+        for query in [q for q in queries if q]:
+            try:
+                response = await client.get(
+                    "https://api.mercadolibre.com/sites/MLB/search",
+                    params={"q": query, "limit": 20},
+                )
+                if response.status_code != 200:
+                    continue
+                data = response.json()
+            except Exception:
+                continue
+            results = data.get("results") or []
+            if item_id:
+                for item in results:
+                    if item.get("id") == item_id:
+                        return item
+            if results:
+                return results[0]
+        return {}
 
     @staticmethod
     def _format_price(value: object) -> str | None:
@@ -95,3 +122,15 @@ class MercadoLivreAdapter(BaseStoreAdapter):
             return str(value)
         formatted = f"R$ {number:,.2f}"
         return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+    @classmethod
+    def _format_installments(cls, installments: object) -> str | None:
+        if not isinstance(installments, dict):
+            return None
+        quantity = installments.get("quantity")
+        amount = cls._format_price(installments.get("amount"))
+        if not quantity or not amount:
+            return None
+        rate = installments.get("rate")
+        suffix = " sem juros" if rate in (0, 0.0, "0", "0.0", None) else ""
+        return f"{quantity}x de {amount}{suffix}"
