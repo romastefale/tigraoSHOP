@@ -38,6 +38,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                             original_url=permalink,
                             offer_url=permalink,
                             source_quality="api",
+                            price_source="mercadolivre_api",
                         )
                         return StoreResult(card=card)
             except Exception as exc:
@@ -53,18 +54,20 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                 except Exception:
                     listing_data = {}
             offer_url = str(listing_data.get("permalink") or product_input.url)
+            trusted_listing_price = bool(listing_data.get("price"))
             card = OfferCard(
                 store=Store.MERCADOLIVRE,
                 product_id=product_input.product_id or self._string_or_none(listing_data.get("id")),
                 title=self._string_or_none(listing_data.get("title")) or meta.title or "Oferta Mercado Livre",
-                price=self._format_price(listing_data.get("price") or meta.price),
-                old_price=self._format_price(listing_data.get("original_price")),
-                installments=self._format_installments(listing_data.get("installments")),
+                price=self._format_price(listing_data.get("price")) if trusted_listing_price else meta.price,
+                old_price=self._format_price(listing_data.get("original_price")) if trusted_listing_price else None,
+                installments=self._format_installments(listing_data.get("installments")) if trusted_listing_price else None,
                 image_url=self._best_image({}, listing_data) or meta.image_url,
                 photo_file_id=product_input.photo_file_id,
                 original_url=product_input.url,
                 offer_url=offer_url,
                 source_quality="api" if listing_data else "metadata",
+                price_source="mercadolivre_search_api" if trusted_listing_price else meta.price_source,
             )
             return StoreResult(card=card)
 
@@ -85,6 +88,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
         results: list[SearchResult] = []
         for item in data.get("results", [])[:limit]:
             url = item.get("permalink") or ""
+            price = self._format_price(item.get("price"))
             if not url:
                 continue
             results.append(
@@ -92,10 +96,11 @@ class MercadoLivreAdapter(BaseStoreAdapter):
                     title=item.get("title") or "Produto Mercado Livre",
                     url=url,
                     store=Store.MERCADOLIVRE,
-                    price=self._format_price(item.get("price")),
-                    installments=self._format_installments(item.get("installments")),
+                    price=price,
+                    installments=self._format_installments(item.get("installments")) if price else None,
                     product_id=item.get("id"),
                     image_url=self._best_image({}, item),
+                    price_source="mercadolivre_search_api" if price else None,
                 )
             )
         return results or [self._fallback_search_result(query)]
@@ -134,6 +139,7 @@ class MercadoLivreAdapter(BaseStoreAdapter):
             price=None,
             product_id=None,
             image_url=None,
+            price_source=None,
         )
 
     @staticmethod
