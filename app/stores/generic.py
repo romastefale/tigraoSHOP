@@ -20,7 +20,8 @@ class MetadataStoreAdapter(BaseStoreAdapter):
         if not url:
             return StoreResult(ok=False, error=f"{self.name} precisa de link para montar a oferta inicial.")
         meta = await fetch_metadata(url, self.settings.request_timeout_seconds)
-        title = main_product_name(meta.title or product_input.query or f"Oferta {self.name}", max_chars=90)
+        fallback_title = product_input.query or product_input.raw_text or f"Oferta {self.name}"
+        title = main_product_name(meta.title or fallback_title, max_chars=90)
         card = OfferCard(
             store=self.store,
             product_id=product_input.product_id,
@@ -30,7 +31,7 @@ class MetadataStoreAdapter(BaseStoreAdapter):
             photo_file_id=product_input.photo_file_id,
             original_url=url,
             offer_url=url,
-            source_quality="metadata" if meta.title else "fallback",
+            source_quality="metadata" if meta.title or meta.price or meta.image_url else "fallback",
         )
         return StoreResult(card=card)
 
