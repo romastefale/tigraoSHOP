@@ -74,6 +74,8 @@ class MetadataStoreAdapter(BaseStoreAdapter):
             return f"https://shopee.com.br/search?keyword={encoded}"
         if self.store == Store.ALIEXPRESS:
             return f"https://www.aliexpress.com/wholesale?SearchText={encoded}"
+        if self.store == Store.MAGALU:
+            return "https://www.magazineluiza.com.br/busca/" + encoded
         if self.store == Store.SHEIN:
             return f"https://br.shein.com/pdsearch/{encoded}/"
         return None
