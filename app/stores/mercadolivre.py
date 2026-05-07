@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from app.config import Settings
@@ -102,19 +104,34 @@ class MercadoLivreAdapter(BaseStoreAdapter):
         return results
 
     @staticmethod
-    def _best_image(item_data: dict[str, object]) -> str | None:
+    def _thumbnail_id_url(thumbnail_id: object) -> str | None:
+        if not isinstance(thumbnail_id, str) or not thumbnail_id.strip():
+            return None
+        value = thumbnail_id.strip()
+        if not re.match(r"^[A-Z0-9_\-]+$", value, flags=re.IGNORECASE):
+            return None
+        return f"https://http2.mlstatic.com/D_NQ_NP_2X_{value}-F.jpg"
+
+    @classmethod
+    def _best_image(cls, item_data: dict[str, object]) -> str | None:
+        candidates: list[str] = []
         pictures = item_data.get("pictures")
         if isinstance(pictures, list):
             for picture in pictures:
                 if isinstance(picture, dict):
-                    url = picture.get("secure_url") or picture.get("url")
-                    if isinstance(url, str) and url.startswith("http"):
-                        return normalize_ml_image_url(url)
+                    for key in ("secure_url", "url"):
+                        url = picture.get(key)
+                        if isinstance(url, str) and url.startswith("http"):
+                            candidates.append(url)
+        thumb_id_url = cls._thumbnail_id_url(item_data.get("thumbnail_id"))
+        if thumb_id_url:
+            candidates.append(thumb_id_url)
         for key in ("secure_thumbnail", "thumbnail"):
             url = item_data.get(key)
             if isinstance(url, str) and url.startswith("http"):
-                return normalize_ml_image_url(url)
-        return None
+                candidates.append(url)
+        normalized = [normalize_ml_image_url(url) for url in candidates]
+        return next((url for url in normalized if url), None)
 
     @staticmethod
     def _string_or_none(value: object) -> str | None:
