@@ -15,6 +15,7 @@ class PageMetadata:
     title: str | None = None
     image_url: str | None = None
     price: str | None = None
+    price_source: str | None = None
 
 
 def _find_meta(content: str, *names: str) -> str | None:
@@ -76,6 +77,22 @@ def _jsonld_type(node: dict[str, Any]) -> set[str]:
     return set()
 
 
+def _iter_jsonld(content: str) -> list[Any]:
+    scripts = re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    parsed: list[Any] = []
+    for raw_script in scripts:
+        cleaned = html.unescape(raw_script).strip()
+        try:
+            parsed.append(json.loads(cleaned))
+        except json.JSONDecodeError:
+            continue
+    return parsed
+
+
 def _find_jsonld_image(content: str) -> str | None:
     for data in _iter_jsonld(content):
         for node in _walk_json(data):
@@ -95,23 +112,7 @@ def _find_jsonld_image(content: str) -> str | None:
     return None
 
 
-def _iter_jsonld(content: str) -> list[Any]:
-    scripts = re.findall(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        content,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    parsed: list[Any] = []
-    for raw_script in scripts:
-        cleaned = html.unescape(raw_script).strip()
-        try:
-            parsed.append(json.loads(cleaned))
-        except json.JSONDecodeError:
-            continue
-    return parsed
-
-
-def _find_jsonld_price(content: str) -> str | None:
+def _find_jsonld_price(content: str) -> tuple[str | None, str | None]:
     for data in _iter_jsonld(content):
         for node in _walk_json(data):
             if not isinstance(node, dict):
@@ -125,8 +126,8 @@ def _find_jsonld_price(content: str) -> str | None:
             if price:
                 formatted = _format_brl(price)
                 if formatted and (not currency or str(currency).upper() in {"BRL", "R$"}):
-                    return formatted
-    return None
+                    return formatted, "jsonld_product_offer"
+    return None, None
 
 
 def _is_safe_product_price_context(url: str, content: str) -> bool:
@@ -149,9 +150,10 @@ def _is_safe_product_price_context(url: str, content: str) -> bool:
     return any(marker in content for marker in product_markers)
 
 
-def _trusted_meta_price(content: str) -> str | None:
+def _trusted_meta_price(content: str) -> tuple[str | None, str | None]:
     raw = _find_meta(content, "product:price:amount", "og:price:amount")
-    return _format_brl(raw)
+    formatted = _format_brl(raw)
+    return (formatted, "product_meta") if formatted else (None, None)
 
 
 async def fetch_metadata(url: str, timeout: float = 4.0) -> PageMetadata:
@@ -172,11 +174,15 @@ async def fetch_metadata(url: str, timeout: float = 4.0) -> PageMetadata:
 
     image_url = _find_meta(content, "og:image", "twitter:image") or _find_jsonld_image(content)
     price = None
+    price_source = None
     if _is_safe_product_price_context(final_url, content):
-        price = _trusted_meta_price(content) or _find_jsonld_price(content)
+        price, price_source = _trusted_meta_price(content)
+        if not price:
+            price, price_source = _find_jsonld_price(content)
 
     return PageMetadata(
         title=_find_meta(content, "og:title", "twitter:title") or _find_title(content),
         image_url=image_url,
         price=price,
+        price_source=price_source,
     )
