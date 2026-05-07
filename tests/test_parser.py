@@ -22,6 +22,13 @@ def test_parse_mercado_livre_short_link_host() -> None:
     assert product.url == "https://meli.la/abc123"
 
 
+def test_parse_mercado_livre_sec_code() -> None:
+    product = parse_offer_input("HV0JHT-VEUF")
+    assert product.store == Store.MERCADOLIVRE
+    assert product.url == "https://www.mercadolivre.com.br/sec/HV0JHT-VEUF"
+    assert product.product_id is None
+
+
 def test_clean_item_id_variants() -> None:
     assert clean_item_id("MLB-1234567890") == "MLB1234567890"
     assert clean_item_id("MLB1234567890") == "MLB1234567890"
