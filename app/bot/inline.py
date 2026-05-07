@@ -31,7 +31,7 @@ def _article_from_card(card: OfferCard) -> InlineQueryResultArticle:
     text = render_offer_html(card)
     description = f"{card.price or 'Preço no link'} · {STORE_LABELS.get(card.store, card.store.value)}"
     return InlineQueryResultArticle(
-        id=_stable_id(card.affiliate_url + card.title),
+        id=_stable_id(card.offer_url + card.title),
         title=card.title[:64],
         description=description[:120],
         thumbnail_url=card.image_url,
@@ -39,7 +39,7 @@ def _article_from_card(card: OfferCard) -> InlineQueryResultArticle:
             message_text=text,
             parse_mode=ParseMode.HTML,
         ),
-        reply_markup=_button_url(card.affiliate_url),
+        reply_markup=_button_url(card.offer_url),
     )
 
 
