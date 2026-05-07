@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+import re
+from urllib.parse import urlparse
+
+from app.core.models import ProductInput, Store
+from app.core.security import normalize_user_url
+
+URL_RE = re.compile(r"https?://[^\s<>]+|www\.[^\s<>]+", re.IGNORECASE)
+MLB_RE = re.compile(r"\bMLB-?\d{6,}\b", re.IGNORECASE)
+ASIN_RE = re.compile(r"\bB0[A-Z0-9]{8}\b|\b\d{9}[0-9X]\b", re.IGNORECASE)
+SHOPEE_ITEM_RE = re.compile(r"(?:i\.)?(\d{6,})\.(\d{6,})")
+ALIEXPRESS_ITEM_RE = re.compile(r"/(?:item/)?(\d{8,})\.html", re.IGNORECASE)
+SHEIN_ITEM_RE = re.compile(r"(?:-p-|goods_id=)(\d{5,})", re.IGNORECASE)
+
+
+def detect_store_from_url(url: str) -> Store:
+    host = (urlparse(url).netloc or "").lower()
+    if "mercadolivre" in host or "mercadolibre" in host or "meli" in host:
+        return Store.MERCADOLIVRE
+    if "shopee" in host:
+        return Store.SHOPEE
+    if "amazon" in host or host in {"a.co", "amzn.to"} or "amzn." in host:
+        return Store.AMAZON
+    if "aliexpress" in host:
+        return Store.ALIEXPRESS
+    if "shein" in host:
+        return Store.SHEIN
+    return Store.UNKNOWN
+
+
+def detect_store_from_id(text: str) -> Store:
+    if MLB_RE.search(text):
+        return Store.MERCADOLIVRE
+    if ASIN_RE.search(text):
+        return Store.AMAZON
+    return Store.UNKNOWN
+
+
+def extract_product_id(store: Store, text: str) -> str | None:
+    if store == Store.MERCADOLIVRE:
+        match = MLB_RE.search(text)
+        if match:
+            return match.group(0).replace("-", "").upper()
+        path_match = re.search(r"/MLB-?(\d{6,})", text, re.IGNORECASE)
+        if path_match:
+            return f"MLB{path_match.group(1)}"
+    if store == Store.AMAZON:
+        asin_path = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", text, re.IGNORECASE)
+        if asin_path:
+            return asin_path.group(1).upper()
+        match = ASIN_RE.search(text)
+        if match:
+            return match.group(0).upper()
+    if store == Store.SHOPEE:
+        match = SHOPEE_ITEM_RE.search(text)
+        if match:
+            return f"{match.group(1)}.{match.group(2)}"
+    if store == Store.ALIEXPRESS:
+        match = ALIEXPRESS_ITEM_RE.search(text)
+        if match:
+            return match.group(1)
+    if store == Store.SHEIN:
+        match = SHEIN_ITEM_RE.search(text)
+        if match:
+            return match.group(1)
+    return None
+
+
+def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_search: bool = False) -> ProductInput:
+    raw = (text or "").strip()
+    url_match = URL_RE.search(raw)
+    if url_match:
+        url = normalize_user_url(url_match.group(0))
+        store = detect_store_from_url(url)
+        return ProductInput(
+            source="reply_photo" if photo_file_id else "url",
+            store=store,
+            raw_text=raw,
+            url=url,
+            product_id=extract_product_id(store, url),
+            photo_file_id=photo_file_id,
+        )
+
+    store = detect_store_from_id(raw)
+    product_id = extract_product_id(store, raw)
+    if product_id:
+        return ProductInput(
+            source="reply_photo" if photo_file_id else "id",
+            store=store,
+            raw_text=raw,
+            product_id=product_id,
+            photo_file_id=photo_file_id,
+        )
+
+    return ProductInput(
+        source="search" if force_search or raw else "empty",
+        store=Store.UNKNOWN,
+        raw_text=raw,
+        query=raw or None,
+        photo_file_id=photo_file_id,
+    )
