@@ -7,6 +7,7 @@ from aiogram.types import LinkPreviewOptions, Message
 
 from app.bot.keyboards import offer_keyboard
 from app.bot.render import render_offer_html
+from app.bot.search_flow import parse_store_search, send_search_results, send_store_choice
 from app.config import Settings
 from app.core.models import ProductInput, SearchResult
 from app.core.parser import URL_RE, parse_offer_input
@@ -18,19 +19,46 @@ from app.services.offer_service import OfferService
 router = Router(name="commands")
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
-HELP_TEXT = """Envie link, ID ou pesquise uma oferta.
+HELP_TEXT = """<b>Como usar o tigraoSHOP</b>
 
-Privado:
-• cole o link do produto
-• envie o ID do produto
-• use /s termo de busca
+<b>Enviar oferta pronta</b>
+Cole um link de produto no privado ou use no grupo:
+<code>/of link-do-produto</code>
 
-Grupo:
-• /of link
-• /of ID
-• /s termo
+Funciona com links normais e links curtos conhecidos de Shopee, Mercado Livre, Amazon, AliExpress e SHEIN.
 
-Também funciona respondendo uma foto com /of link para usar a imagem como destaque."""
+<b>Pesquisar ofertas</b>
+No privado ou no grupo:
+<code>/s fone bluetooth</code>
+<code>/s mercado livre fone bluetooth</code>
+<code>/s shopee drone</code>
+<code>/s amazon carregador usb-c</code>
+
+No privado, quando você não escolher a loja, eu mostro botões para pesquisar em todas ou em uma loja específica.
+
+<b>Imagem de destaque</b>
+Responda uma foto com:
+<code>/of link-do-produto</code>
+
+A foto respondida será usada como imagem principal do post.
+
+<b>Inline</b>
+Digite em qualquer conversa:
+<code>@seu_bot produto</code>
+
+Eu retorno resultados rápidos com loja, produto e preço quando a loja permitir obter o valor."""
+
+START_TEXT = """<b>tigraoSHOP pronto.</b>
+
+Eu transformo links e buscas em posts limpos de oferta.
+
+Você pode começar de três formas:
+
+1. Cole um link de produto aqui no privado.
+2. Pesquise com <code>/s nome do produto</code>.
+3. No grupo, use <code>/of link</code> ou <code>/s produto</code>.
+
+Para escolher a loja na busca privada, use <code>/s produto</code> e toque nos botões."""
 
 
 def _command_payload(message: Message) -> str:
@@ -172,12 +200,12 @@ async def _publish_offer(
 
 @router.message(CommandStart())
 async def start(message: Message) -> None:
-    await message.answer("tigraoSHOP pronto.\n\n" + HELP_TEXT, link_preview_options=NO_PREVIEW)
+    await message.answer(START_TEXT, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("help"))
 async def help_cmd(message: Message) -> None:
-    await message.answer(HELP_TEXT, link_preview_options=NO_PREVIEW)
+    await message.answer(HELP_TEXT, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("of"))
@@ -186,12 +214,18 @@ async def offer_cmd(message: Message, bot: Bot, offer_service: OfferService, off
 
 
 @router.message(Command("s"))
-async def search_cmd(message: Message, bot: Bot, offer_service: OfferService, offer_repo: OfferRepository, settings: Settings) -> None:
+async def search_cmd(message: Message, offer_service: OfferService, settings: Settings) -> None:
     payload = _command_payload(message)
     if not payload:
-        await message.reply("Use /s termo de busca.", link_preview_options=NO_PREVIEW)
+        await message.reply("Use <code>/s nome do produto</code> ou <code>/s loja produto</code>.", parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
         return
-    await _publish_offer(message, bot, offer_service, offer_repo, settings, payload, force_search=True)
+
+    query, store = parse_store_search(payload)
+    if message.chat.type == ChatType.PRIVATE and store is None:
+        await send_store_choice(message, query)
+        return
+
+    await send_search_results(message, offer_service, query, store=store, timeout=settings.inline_timeout_seconds)
 
 
 @router.message(F.chat.type == ChatType.PRIVATE, F.text)
@@ -199,4 +233,8 @@ async def private_plain_text(message: Message, bot: Bot, offer_service: OfferSer
     text = message.text or ""
     if text.startswith("/"):
         return
-    await _publish_offer(message, bot, offer_service, offer_repo, settings, text, force_search=True)
+    product_input = parse_offer_input(text, force_search=False)
+    if product_input.url or product_input.product_id:
+        await _publish_offer(message, bot, offer_service, offer_repo, settings, text, force_search=False)
+        return
+    await send_store_choice(message, text)
