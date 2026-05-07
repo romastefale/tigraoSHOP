@@ -22,17 +22,19 @@ class MetadataStoreAdapter(BaseStoreAdapter):
         meta = await fetch_metadata(url, self.settings.request_timeout_seconds)
         fallback_title = product_input.query or product_input.raw_text or f"Oferta {self.name}"
         title = main_product_name(meta.title or fallback_title, max_chars=90)
+        price = meta.price or product_input.shared_price
+        price_source = meta.price_source or ("shared_text" if product_input.shared_price else None)
         card = OfferCard(
             store=self.store,
             product_id=product_input.product_id,
             title=title,
-            price=meta.price,
-            price_source=meta.price_source,
+            price=price,
+            price_source=price_source,
             image_url=meta.image_url,
             photo_file_id=product_input.photo_file_id,
             original_url=url,
             offer_url=url,
-            source_quality="metadata" if meta.title or meta.price or meta.image_url else "fallback",
+            source_quality="metadata" if meta.title or price or meta.image_url else "fallback",
         )
         return StoreResult(card=card)
 
