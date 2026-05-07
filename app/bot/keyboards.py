@@ -3,7 +3,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot.render import STORE_LABELS
-from app.core.models import OfferCard
+from app.core.models import OfferCard, SearchResult, Store
 from app.core.titles import main_product_name
 
 
@@ -26,3 +26,30 @@ def offer_keyboard(card: OfferCard, offer_id: int | None = None) -> InlineKeyboa
         [_button("Similares", switch_inline_query_current_chat=search_query, style="danger")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def store_choice_keyboard(query: str) -> InlineKeyboardMarkup:
+    cleaned = main_product_name(query, max_chars=50)
+    rows = [
+        [
+            _button("Todas", callback_data=f"search_store:all:{cleaned}", style="primary"),
+            _button("Mercado Livre", callback_data=f"search_store:mercadolivre:{cleaned}", style="success"),
+        ],
+        [
+            _button("Amazon", callback_data=f"search_store:amazon:{cleaned}", style="primary"),
+            _button("Shopee", callback_data=f"search_store:shopee:{cleaned}", style="primary"),
+        ],
+        [
+            _button("AliExpress", callback_data=f"search_store:aliexpress:{cleaned}", style="primary"),
+            _button("SHEIN", callback_data=f"search_store:shein:{cleaned}", style="primary"),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def search_result_keyboard(result: SearchResult | OfferCard) -> InlineKeyboardMarkup:
+    store_name = STORE_LABELS.get(result.store, result.store.value)
+    url = result.offer_url if isinstance(result, OfferCard) else result.url
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[_button(store_name, url=url, style="success")]]
+    )
