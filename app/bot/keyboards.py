@@ -16,6 +16,8 @@ def _button(text: str, *, style: str | None = None, copy_text: str | None = None
     except Exception:
         payload.pop("style", None)
         payload.pop("copy_text", None)
+        if copy_text and not any(key in payload for key in ("url", "callback_data", "switch_inline_query_current_chat")):
+            payload["url"] = copy_text
         return InlineKeyboardButton(**payload)
 
 
