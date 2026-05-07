@@ -13,6 +13,7 @@ class Store(StrEnum):
     MERCADOLIVRE = "mercadolivre"
     AMAZON = "amazon"
     ALIEXPRESS = "aliexpress"
+    MAGALU = "magalu"
     SHEIN = "shein"
     UNKNOWN = "unknown"
 
