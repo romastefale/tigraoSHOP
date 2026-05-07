@@ -18,16 +18,6 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="./data/offers.db", alias="DATABASE_URL")
 
-    default_affiliate_tag: str = Field(default="", alias="DEFAULT_AFFILIATE_TAG")
-    mercadolivre_affiliate_tag: str = Field(default="", alias="MERCADOLIVRE_AFFILIATE_TAG")
-    mercadolivre_matt_word: str = Field(default="", alias="MERCADOLIVRE_MATT_WORD")
-    mercadolivre_matt_tool: str = Field(default="", alias="MERCADOLIVRE_MATT_TOOL")
-    aliexpress_tracking_id: str = Field(default="", alias="ALIEXPRESS_TRACKING_ID")
-    amazon_associate_tag: str = Field(default="", alias="AMAZON_ASSOCIATE_TAG")
-    shopee_tracking_id: str = Field(default="", alias="SHOPEE_TRACKING_ID")
-    shopee_sub_id: str = Field(default="", alias="SHOPEE_SUB_ID")
-    shein_affiliate_tag: str = Field(default="", alias="SHEIN_AFFILIATE_TAG")
-
     request_timeout_seconds: float = Field(default=4.0, alias="REQUEST_TIMEOUT_SECONDS")
     inline_timeout_seconds: float = Field(default=1.2, alias="INLINE_TIMEOUT_SECONDS")
     inline_cache_time: int = Field(default=30, alias="INLINE_CACHE_TIME")
