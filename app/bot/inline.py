@@ -10,6 +10,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQuer
 from app.bot.render import STORE_LABELS, render_offer_html, render_search_result
 from app.config import Settings
 from app.core.models import OfferCard, SearchResult
+from app.core.titles import main_product_name
 from app.services.offer_service import OfferService
 
 router = Router(name="inline")
@@ -27,16 +28,21 @@ def _button_url(url: str, label: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[button]])
 
 
+def _description(price: str | None, installments: str | None) -> str:
+    description = f"{price} à vista" if price else "Preço disponível abrindo a loja"
+    if installments:
+        description += f" · {installments}"
+    return description[:120]
+
+
 def _article_from_card(card: OfferCard) -> InlineQueryResultArticle:
     text = render_offer_html(card)
     store_name = STORE_LABELS.get(card.store, card.store.value)
-    description = card.price or "Preço no link"
-    if card.installments:
-        description += f" · {card.installments}"
+    clean_title = main_product_name(card.title, max_chars=70)
     return InlineQueryResultArticle(
         id=_stable_id(card.offer_url + card.title),
-        title=card.title[:64],
-        description=description[:120],
+        title=f"{store_name} · {clean_title}"[:64],
+        description=_description(card.price, card.installments),
         thumbnail_url=card.image_url,
         input_message_content=InputTextMessageContent(
             message_text=text,
@@ -47,20 +53,22 @@ def _article_from_card(card: OfferCard) -> InlineQueryResultArticle:
 
 
 def _article_from_search(result: SearchResult) -> InlineQueryResultArticle:
-    title = result.title[:64]
     store_name = STORE_LABELS.get(result.store, result.store.value)
+    clean_title = main_product_name(result.title, max_chars=70)
     summary = render_search_result(result.title, result.price, result.store)
     if result.installments:
         summary += f" · {result.installments}"
-    text = f'🛍 <a href="{escape(result.url, quote=True)}">{escape(result.title[:180])}</a>\n\n'
+    text = f'🛍 <a href="{escape(result.url, quote=True)}">{escape(clean_title)}</a>\n\n'
     if result.price:
-        text += f"💰 <b>{escape(result.price)}</b>\n"
+        text += f"💰 <b>{escape(result.price)}</b> à vista\n"
+    else:
+        text += "💰 <b>Preço disponível abrindo a loja</b>\n"
     if result.installments:
         text += f"💳 {escape(result.installments)}\n"
-    text += "\nOferta encontrada em busca rápida."
+    text += "\nConfira condições e disponibilidade abrindo a loja."
     return InlineQueryResultArticle(
         id=_stable_id(result.url + result.title),
-        title=title,
+        title=f"{store_name} · {clean_title}"[:64],
         description=summary[:120],
         thumbnail_url=result.image_url,
         input_message_content=InputTextMessageContent(
