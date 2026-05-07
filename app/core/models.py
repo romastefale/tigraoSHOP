@@ -34,7 +34,7 @@ class OfferCard(BaseModel):
     currency: str = "BRL"
     image_url: Optional[str] = None
     photo_file_id: Optional[str] = None
-    affiliate_url: str
+    offer_url: str
     original_url: str
     rating: Optional[str] = None
     shipping: Optional[str] = None
