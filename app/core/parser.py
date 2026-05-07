@@ -13,6 +13,10 @@ SHOPEE_DOT_RE = re.compile(r"(?:i\.)?(\d{5,})\.(\d{5,})")
 SHOPEE_PRODUCT_RE = re.compile(r"/product/(\d{5,})/(\d{5,})", re.IGNORECASE)
 ALIEXPRESS_ITEM_RE = re.compile(r"/(?:item/)?(\d{8,})\.html", re.IGNORECASE)
 SHEIN_ITEM_RE = re.compile(r"(?:-p-|goods_id=|productCode=)(\d{5,})", re.IGNORECASE)
+PRICE_RE = re.compile(
+    r"(?:preço\s*base|somente|por\s+apenas|por|preço)\s*:?\s*R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2}|[0-9]{1,7},[0-9]{2})",
+    re.IGNORECASE,
+)
 
 
 def detect_store_from_url(url: str) -> Store:
@@ -81,6 +85,17 @@ def extract_product_id(store: Store, text: str) -> str | None:
     return None
 
 
+def extract_shared_price(text: str | None) -> str | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    match = PRICE_RE.search(raw)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return f"R$ {value}"
+
+
 def strip_shared_app_text(text: str | None) -> str:
     raw = (text or "").strip()
     if not raw:
@@ -93,6 +108,7 @@ def strip_shared_app_text(text: str | None) -> str:
         r"\s+com\s+\d+%\s+de\s+desconto!?$",
         r"\s+Somente\s+R\$\s*[\d\.,]+\.?$",
         r"\s+Por\s+apenas\s+R\$\s*[\d\.,]+\.?$",
+        r"\s+Preço\s+base\s*:\s*R\$\s*[\d\.,]+\.?$",
         r"\s+Encontre\s+na\s+Shopee\s+agora!?$",
         r"\s+Compre\s+na\s+Shopee.*$",
         r"\s+Encontre\s+no\s+Mercado\s+Livre\s+agora!?$",
@@ -115,6 +131,7 @@ def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_
     raw = (text or "").strip()
     url_match = URL_RE.search(raw)
     cleaned_query = strip_shared_app_text(raw)
+    shared_price = extract_shared_price(raw)
     if url_match:
         url = normalize_user_url(url_match.group(0))
         store = detect_store_from_url(url)
@@ -125,6 +142,7 @@ def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_
             url=url,
             product_id=extract_product_id(store, url),
             query=cleaned_query if cleaned_query and cleaned_query != url else None,
+            shared_price=shared_price,
             photo_file_id=photo_file_id,
         )
 
@@ -137,6 +155,7 @@ def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_
             raw_text=raw,
             product_id=product_id,
             query=cleaned_query or None,
+            shared_price=shared_price,
             photo_file_id=photo_file_id,
         )
 
@@ -145,5 +164,6 @@ def parse_offer_input(text: str | None, photo_file_id: str | None = None, force_
         store=Store.UNKNOWN,
         raw_text=raw,
         query=cleaned_query or raw or None,
+        shared_price=shared_price,
         photo_file_id=photo_file_id,
     )
