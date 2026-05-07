@@ -25,7 +25,7 @@ class MetadataStoreAdapter(BaseStoreAdapter):
             image_url=meta.image_url,
             photo_file_id=product_input.photo_file_id,
             original_url=url,
-            affiliate_url=url,
+            offer_url=url,
             source_quality="metadata" if meta.title else "fallback",
         )
         return StoreResult(card=card)
