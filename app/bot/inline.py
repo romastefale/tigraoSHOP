@@ -61,6 +61,8 @@ def _photo_from_card(card: OfferCard) -> InlineQueryResultPhoto:
         id=_stable_id(image_url + card.title),
         photo_url=image_url,
         thumbnail_url=image_url,
+        photo_width=1200,
+        photo_height=1200,
         title=f"{store_name} · {clean_title}"[:64],
         description=_description(card),
         caption=render_offer_html(card),
