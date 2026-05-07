@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.bot.render import STORE_LABELS
 from app.core.models import OfferCard
 
 
@@ -22,13 +23,12 @@ def _button(text: str, *, style: str | None = None, copy_text: str | None = None
 
 
 def offer_keyboard(card: OfferCard, offer_id: int | None = None, can_remove: bool = False) -> InlineKeyboardMarkup:
+    store_name = STORE_LABELS.get(card.store, card.store.value)
     rows: list[list[InlineKeyboardButton]] = [
-        [_button("🟢 Ver oferta", url=card.offer_url, style="success")],
+        [_button(store_name, url=card.offer_url, style="success")],
         [
-            _button("🔵 Copiar link", copy_text=card.offer_url, style="primary"),
-            _button("🔵 Similares", switch_inline_query_current_chat=card.title[:50], style="primary"),
+            _button("Copiar link", copy_text=card.offer_url, style="primary"),
+            _button("Similares", switch_inline_query_current_chat=card.title[:50], style="danger"),
         ],
     ]
-    if can_remove and offer_id:
-        rows.append([_button("🔴 Remover", callback_data=f"remove:{offer_id}", style="danger")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
