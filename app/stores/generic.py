@@ -3,14 +3,12 @@ from __future__ import annotations
 from app.config import Settings
 from app.core.metadata import fetch_metadata
 from app.core.models import OfferCard, ProductInput, Store, StoreResult
-from app.services.affiliate import AffiliateService
 from app.stores.base import BaseStoreAdapter
 
 
 class MetadataStoreAdapter(BaseStoreAdapter):
-    def __init__(self, settings: Settings, affiliate: AffiliateService, store: Store, display_name: str) -> None:
+    def __init__(self, settings: Settings, store: Store, display_name: str) -> None:
         self.settings = settings
-        self.affiliate = affiliate
         self.store = store
         self.name = display_name
 
@@ -27,7 +25,7 @@ class MetadataStoreAdapter(BaseStoreAdapter):
             image_url=meta.image_url,
             photo_file_id=product_input.photo_file_id,
             original_url=url,
-            affiliate_url=self.affiliate.convert(self.store, url),
+            affiliate_url=url,
             source_quality="metadata" if meta.title else "fallback",
         )
         return StoreResult(card=card)
