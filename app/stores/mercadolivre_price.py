@@ -58,11 +58,6 @@ def is_mercadolivre_url(url: str) -> bool:
 
 
 def normalize_ml_image_url(url: str | None) -> str | None:
-    """Keep the Mercado Livre image URL exactly as published.
-
-    Rewriting mlstatic URLs to force higher resolution produced broken images in
-    Telegram inline mode. This function now only normalizes the scheme.
-    """
     if not url or not isinstance(url, str) or not url.startswith("http"):
         return None
     return url.replace("http://", "https://").strip()
@@ -113,6 +108,22 @@ def _find_title(content: str) -> str | None:
 def _find_image(content: str) -> str | None:
     image = _find_meta(content, "og:image") or _find_meta(content, "twitter:image")
     return normalize_ml_image_url(image)
+
+
+def _best_image_from_item(item_data: dict[str, Any], fallback: str | None = None) -> str | None:
+    pictures = item_data.get("pictures")
+    if isinstance(pictures, list):
+        for picture in pictures:
+            if isinstance(picture, dict):
+                for key in ("secure_url", "url"):
+                    url = normalize_ml_image_url(picture.get(key))
+                    if url:
+                        return url
+    for key in ("secure_thumbnail", "thumbnail"):
+        url = normalize_ml_image_url(item_data.get(key))
+        if url:
+            return url
+    return normalize_ml_image_url(fallback)
 
 
 def _parse_price(value: object) -> float | None:
@@ -257,6 +268,19 @@ async def analyze_mercadolivre_url(url: str, timeout: float = 4.0) -> PriceDecis
     item_id = extract_item_id(normalized, final_url, canonical, og_url, script_id)
     title = _find_title(content)
     image = _find_image(content)
+
+    if item_id:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                item_response = await client.get(f"https://api.mercadolibre.com/items/{item_id}")
+                if item_response.status_code == 200:
+                    item_data = item_response.json()
+                    if isinstance(item_data, dict):
+                        image = _best_image_from_item(item_data, image)
+                        title = str(item_data.get("title") or title or "Produto Mercado Livre")
+        except Exception:
+            pass
+
     evidences = collect_price_evidences(content, item_id)
     best = choose_best_evidence(evidences)
 
